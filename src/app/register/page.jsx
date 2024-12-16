@@ -1,176 +1,165 @@
 "use client";
+import { useEffect, useRef, useState } from "react";
+import Mynav from "../component/Mynav";
 
-import { motion, useAnimation } from "framer-motion";
-import { useEffect, useState } from "react";
+const BotConfigurator = () => {
+  const [hotelName, setHotelName] = useState("");
+  const [hotelAddress, setHotelAddress] = useState("");
+  const [partnerships, setPartnerships] = useState("");
+  const [description, setDescription] = useState("");
+  const [voiceStyle, setVoiceStyle] = useState("Professionale");
+  const [behaviorMode, setBehaviorMode] = useState("Interattivo");
+  const [isLoading, setIsLoading] = useState(false);
+  const [assistantId, setAssistantId] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
-const sections = [
-  {
-    title: "Disponibilità 24/7",
-    description: "Il nostro bot è sempre attivo per rispondere ai tuoi clienti in tempo reale.",
-    image: "/uno.webp",
-  },
-  {
-    title: "Personalizzazione Avanzata",
-    description: "Adatta il bot per riflettere lo stile unico della tua attività.",
-    image: "/due.webp",
-  },
-  {
-    title: "Analisi e Dati",
-    description: "Monitora e ottimizza i tuoi servizi grazie ai report avanzati.",
-    image: "/tre.webp",
-  },
-];
+  const voices = [
+    { id: "Kq9pDHHIMmJsG9PEqOtv", name: "Sandra" },
+    { id: "PSp7S6ST9fDNXDwEzX0m", name: "Marco" },
+    { id: "13Cuh3NuYvWOVQtLbRN8", name: "Giovanni" },
+  ];
 
-export default function WelcomePage() {
-  const [currentIndex, setCurrentIndex] = useState(-1);
+  const handleConfigureBot = async () => {
+    setIsLoading(true);
+    setErrorMessage("");
 
-  useEffect(() => {
-    if (currentIndex === -1) {
-      // Show welcome message for 3 seconds
-      const timeout = setTimeout(() => setCurrentIndex(0), 3000);
-      return () => clearTimeout(timeout);
-    }
+    try {
+      const response = await fetch("/api/openai/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hotelName,
+          hotelAddress,
+          partnerships,
+          description,
+          voiceStyle,
+          behaviorMode,
+        }),
+      });
 
-    const interval = setInterval(() => {
-      setCurrentIndex((prevIndex) => (prevIndex + 1) % sections.length);
-    }, 4000); // Cambia sezione ogni 4 secondi
+      const data = await response.json();
 
-    return () => clearInterval(interval);
-  }, [currentIndex]);
-
-  if (currentIndex === -1) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-black via-[#0b0d13] to-[#07080d] text-white flex items-center justify-center">
-        <motion.h1
-          className="text-6xl md:text-8xl font-extrabold mb-8 bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500 leading-tight"
-          initial={{ opacity: 1 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1 }}
-        >
-          Benvenuto, stiamo programmando il tutto...
-        </motion.h1>
-      </div>
-    );
-  }
-
-  const currentSection = sections[currentIndex];
-
-  return (
-    <div className="relative min-h-screen bg-gradient-to-b from-black via-[#0b0d13] to-[#07080d] text-white flex items-center justify-center overflow-hidden">
-      {/* Sfondo dinamico */}
-      <BackgroundAnimation />
-
-      {/* Contenuto */}
-      <motion.div
-        key={currentIndex}
-        initial={{ opacity: 1, x: currentIndex % 2 === 0 ? -50 : 50 }}
-        animate={{ opacity: 1, x: 1 }}
-        exit={{ opacity: 1, x: currentIndex % 2 === 0 ? 50 : -50 }}
-        transition={{ duration: 1 }}
-        className="flex flex-col md:flex-row items-center justify-center max-w-6xl px-6 gap-12"
-      >
-        {currentIndex % 2 === 0 ? (
-          <>
-            <TextContent section={currentSection} />
-            <ImageContent section={currentSection} />
-          </>
-        ) : (
-          <>
-            <ImageContent section={currentSection} />
-            <TextContent section={currentSection} />
-          </>
-        )}
-      </motion.div>
-    </div>
-  );
-}
-
-function BackgroundAnimation() {
-  return (
-    <motion.div
-      className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_#1a1b1f_0%,_transparent_70%),radial-gradient(ellipse_at_bottom,#101115_0%,transparent_70%)]"
-      animate={{ opacity: [1, 1, 1], scale: [1, 1.05, 1] }}
-      transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
-    >
-      <div className="absolute inset-0">
-        {Array.from({ length: 50 }).map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute bg-white rounded-full opacity-30"
-            style={{
-              width: `${Math.random() * 2 + 1}px`,
-              height: `${Math.random() * 2 + 1}px`,
-              top: `${Math.random() * 100}%`,
-              left: `${Math.random() * 100}%`,
-            }}
-            animate={{
-              opacity: [0.3, 0.7, 0.3],
-              y: [`${Math.random() * 10 - 5}px`, `${Math.random() * 20 - 10}px`],
-            }}
-            transition={{
-              duration: Math.random() * 5 + 5,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-          ></motion.div>
-        ))}
-      </div>
-    </motion.div>
-  );
-}
-
-function TextContent({ section }) {
-  return (
-    <div className="text-center md:text-left flex-1">
-      <TypewriterText title={section.title} />
-      <motion.p
-        className="text-lg text-gray-300"
-        initial={{ opacity: 1 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 1, delay: 0.5 }}
-      >
-        {section.description}
-      </motion.p>
-    </div>
-  );
-}
-
-function ImageContent({ section }) {
-  return (
-    <div className="flex-1 flex items-center justify-center">
-      <motion.img
-        src={section.image}
-        alt={section.title}
-        className="w-120 h-120 object-cover rounded-lg shadow-lg"
-        initial={{ scale: 0.8, opacity: 1 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 1 }}
-      />
-    </div>
-  );
-}
-
-function TypewriterText({ title }) {
-  const [displayText, setDisplayText] = useState("");
-
-  useEffect(() => {
-    let index = 0;
-    const interval = setInterval(() => {
-      setDisplayText(title.slice(0, index + 1));
-      index++;
-      if (index === title.length) {
-        clearInterval(interval);
+      if (response.ok) {
+        setAssistantId(data.id); // Salva l'ID dell'assistente
+        alert(`Assistente creato con successo! ID: ${data.id}`);
+      } else {
+        setErrorMessage(data.error || "Errore durante la configurazione.");
+        console.error("Errore:", data.error);
       }
-    }, 100); // Velocità effetto typewriter
-
-    return () => clearInterval(interval);
-  }, [title]);
+    } catch (error) {
+      setErrorMessage("Errore di rete. Controlla la connessione.");
+      console.error("Errore di rete:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
-    <h1
-      className="text-6xl md:text-8xl font-extrabold mb-8 bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500 leading-tight"
-    >
-      {displayText}
-    </h1>
+    <>
+      <Mynav />
+      <section
+        className="py-16 px-4 relative overflow-hidden min-h-[800px]"
+        style={{
+          background: "radial-gradient(circle, rgba(63,94,251,0.1) 0%, rgba(0,0,0,1) 70%)",
+        }}
+      >
+        <div className="max-w-6xl mx-auto mb-20 relative z-10">
+          <h2 className="text-5xl md:text-6xl font-bold mb-6 text-center bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">
+            Configura il Tuo Assistente
+          </h2>
+          <p className="text-gray-400 text-xl text-center">
+            Inserisci i dettagli per personalizzare il bot al meglio.
+          </p>
+        </div>
+
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-16 items-start relative z-10">
+          {/* Colonna Sinistra */}
+          <div className="space-y-8">
+            <div>
+              <label className="block mb-2 text-gray-300 text-lg">Nome dell'Hotel</label>
+              <input
+                type="text"
+                className="w-full p-4 rounded-md bg-gray-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={hotelName}
+                onChange={(e) => setHotelName(e.target.value)}
+                placeholder="Inserisci il nome dell'hotel"
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-gray-300 text-lg">Indirizzo</label>
+              <input
+                type="text"
+                className="w-full p-4 rounded-md bg-gray-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={hotelAddress}
+                onChange={(e) => setHotelAddress(e.target.value)}
+                placeholder="Inserisci l'indirizzo dell'hotel"
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-gray-300 text-lg">Convenzioni</label>
+              <textarea
+                className="w-full p-4 rounded-md bg-gray-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={partnerships}
+                onChange={(e) => setPartnerships(e.target.value)}
+                placeholder="Es. Ristoranti, attrazioni turistiche..."
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-gray-300 text-lg">Descrizione dell'Hotel</label>
+              <textarea
+                className="w-full p-4 rounded-md bg-gray-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Aggiungi una descrizione unica per il tuo hotel..."
+              />
+            </div>
+            <div>
+              <label className="block mb-2 text-gray-300 text-lg">Stile della Voce</label>
+              <select
+                className="w-full p-4 rounded-md bg-gray-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={voiceStyle}
+                onChange={(e) => setVoiceStyle(e.target.value)}
+              >
+                <option>Professionale</option>
+                <option>Amichevole</option>
+                <option>Casuale</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Colonna Destra */}
+          <div className="space-y-8">
+            <div>
+              <label className="block mb-2 text-gray-300 text-lg">Modalità di Comportamento</label>
+              <select
+                className="w-full p-4 rounded-md bg-gray-800 text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={behaviorMode}
+                onChange={(e) => setBehaviorMode(e.target.value)}
+              >
+                <option>Interattivo</option>
+                <option>Semplice</option>
+              </select>
+            </div>
+            <button
+              className="px-10 py-4 bg-gradient-to-r from-indigo-500 to-purple-500 hover:scale-105 transition-transform rounded-full font-semibold text-lg w-full"
+              onClick={handleConfigureBot}
+              disabled={isLoading || !hotelName || !hotelAddress}
+            >
+              {isLoading ? "Configurazione in corso..." : "Configura Bot"}
+            </button>
+            {assistantId && (
+              <div className="text-green-500 mt-4">
+                Assistente creato con successo! ID: {assistantId}
+              </div>
+            )}
+            {errorMessage && (
+              <div className="text-red-500 mt-4">{errorMessage}</div>
+            )}
+          </div>
+        </div>
+      </section>
+    </>
   );
-}
+};
+
+export default BotConfigurator;
