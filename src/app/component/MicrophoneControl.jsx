@@ -49,51 +49,53 @@ const MicrophoneControl = ({ onNewThread, onToggleListening, onStopRun, onBlockA
   };
 
   return (
-    <div className="flex flex-col items-center space-y-4 py-4 px-2 bg-gray-800 rounded-lg shadow-lg withpulsa">
+    <div className="flex flex-col items-center space-y-6 py-6 px-4 bg-gray-900 rounded-xl shadow-xl border border-gray-700">
     {/* Pulsante Microfono */}
     <div
-      className={`relative w-12 h-12 rounded-full cursor-pointer flex items-center justify-center transition-transform ${
+      className={`relative w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all ${
         isBlocked
-          ? "bg-red-500 shadow-md"
+          ? "bg-red-600 hover:scale-110"
           : isListening
-          ? "bg-blue-500 shadow-md"
-          : "bg-gradient-to-r from-green-400 to-blue-500 shadow-md"
+          ? "bg-blue-600 hover:scale-110"
+          : "bg-gradient-to-r from-green-400 to-blue-500 hover:scale-110"
       }`}
       onClick={toggleListening}
       title={isListening ? "Ascoltando..." : "Premi per ascoltare"}
     >
       {isBlocked ? (
-        <FiXCircle size={20} className="text-white" />
+        <FiXCircle size={28} className="text-white" />
       ) : isListening ? (
-        <FiStopCircle size={20} className="text-white" />
+        <FiStopCircle size={28} className="text-white" />
       ) : (
-        <FiMic size={20} className="text-white" />
+        <FiMic size={28} className="text-white" />
       )}
     </div>
 
-    {/* Altri controlli */}
+    {/* Pulsante Blocca/Sblocca */}
     <button
       onClick={toggleBlockAssistant}
-      className="w-10 h-10 bg-purple-500 hover:bg-purple-600 rounded-full flex items-center justify-center shadow-lg"
+      className="flex items-center justify-center w-14 h-14 bg-purple-600 hover:bg-purple-700 rounded-full shadow-lg hover:scale-105 transition-transform"
       title="Blocca/Sblocca assistente"
     >
-      {isBlocked ? <FiXCircle size={18} className="text-white" /> : <FiPlayCircle size={18} className="text-white" />}
+      {isBlocked ? <FiXCircle size={24} className="text-white" /> : <FiPlayCircle size={24} className="text-white" />}
     </button>
 
+    {/* Pulsante Nuovo Thread */}
     <button
-      onClick={onNewThread}
-      className="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center shadow-lg"
+      onClick={createNewThread}
+      className="flex items-center justify-center w-14 h-14 bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg hover:scale-105 transition-transform"
       title="Nuovo thread"
     >
-      <FiPlusCircle size={18} className="text-white" />
+      <FiPlusCircle size={24} className="text-white" />
     </button>
 
+    {/* Pulsante Ferma Run */}
     <button
-      onClick={onStopRun}
-      className="w-10 h-10 bg-green-500 hover:bg-green-600 rounded-full flex items-center justify-center shadow-lg"
+      onClick={stopRun}
+      className="flex items-center justify-center w-14 h-14 bg-green-600 hover:bg-green-700 rounded-full shadow-lg hover:scale-105 transition-transform"
       title="Ferma run"
     >
-      <FiStopCircle size={18} className="text-white" />
+      <FiStopCircle size={24} className="text-white" />
     </button>
   </div>
   );
