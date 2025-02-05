@@ -13,6 +13,7 @@ import Image from "next/image";
 import dash from "../img/davidus.png"
 import SectionDivider from "./SectionDivider";
 import Footer from "./MyFooter";
+import ReviewSection from "./ReviewSection";
 function useThreeHeroScene() {
   const canvasRef = useRef(null);
   const ref = useRef(null);
@@ -267,8 +268,8 @@ export default function LandingPage() {
     <AudioGenerator></AudioGenerator>
    </section>
 
-      {/* Analytics */}
-
+      {/* review */}
+<ReviewSection />
       {/* Testimonianze */}
       <section id="pricing" className="py-32 px-4 bg-gradient-to-b from-black to-[#0b0d13] text-white relative">
         <div className="max-w-6xl mx-auto text-center mb-16">
@@ -293,7 +294,7 @@ export default function LandingPage() {
             <h3 className="text-2xl font-bold text-indigo-400 mb-4">Base</h3>
             <p className="text-gray-300 text-sm mb-6">Ideale per piccoli progetti e startup.</p>
             <p className="text-5xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">
-              €99
+              €39
             </p>
             <ul className="text-gray-400 text-sm space-y-2 mb-6">
               <li>✔️ Configurazione iniziale</li>
@@ -354,52 +355,7 @@ export default function LandingPage() {
       </section>
 
       {/* Team Section */}
-      <section
-        id="info"
-        className="py-20 px-4 relative overflow-hidden h-100"
-        style={{
-          background: "radial-gradient(circle, rgba(63,94,251,0.1) 0%, rgba(0,0,0,1) 70%)",
-        }}
-      >
-        <div className="absolute inset-0 z-0 vh">
-          {/* Luce soffusa */}
-          <div
-            className="absolute inset-0 bg-gradient-to-t from-purple-800/30 via-transparent to-black/90 rounded-full"
-            style={{
-              filter: "blur(100px)",
-              zIndex: -1,
-            }}
-          >
-            
-          </div>
-        </div>
-
-        <div className="max-w-6xl mx-auto text-center mb-16 relative z-10 py-16" >
-          <h2 className="text-5xl md:text-6xl font-bold mb-6 text-center bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 to-purple-500">
-            Il Nostro Team
-          </h2>
-          <p className="text-gray-400 text-lg">
-            Le menti che guidano questa trasformazione digitale.
-          </p>
-        </div>
-
-        <div className="max-w-4xl mx-auto grid md:grid-cols-3 gap-8 relative z-10">
-          {teamMembers.map((member, i) => (
-            <motion.div
-              key={i}
-              className="p-8 rounded-3xl bg-black/30 backdrop-blur-xl border border-gray-800 hover:border-purple-500 transition-all duration-300 flex flex-col items-center text-center cursor-pointer"
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              whileHover={{ rotateY: 10, rotateX: -5 }}
-            >
-              <Image src={dash} className="w-100 h-100 bg-gray-600 rounded-full mb-4" width={100} height={100}/>
-              <h3 className="text-xl font-semibold">{member.name}</h3>
-              <p className="text-gray-400 text-sm">{member.role}</p>
-            </motion.div>
-          ))}
-        </div>
-      </section>
+ 
 
       {/* FAQ */}
       <section
