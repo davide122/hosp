@@ -1,7 +1,8 @@
 "use client";
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import MicrophoneControl from "./MicrophoneControl";
+// import MicrophoneControl from "./MicrophoneControl";
+// import SettingsMenu from "./SettingMenu";
 
 const ChatWithGP = () => {
   // Stati principali
@@ -14,6 +15,8 @@ const ChatWithGP = () => {
   const [showModal, setShowModal] = useState(false);
   const [pdfLink, setPdfLink] = useState(null);
   const [userInput, setUserInput] = useState("");
+  // Stato per il menù mobile (per avatar e voce)
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   // Stati per selezione immagine e voce
   const [selectedImage, setSelectedImage] = useState(
@@ -31,17 +34,17 @@ const ChatWithGP = () => {
     {
       id: "img1",
       url: "https://www.abeaform.it/wp-content/uploads/2018/11/Abea-Form-Corso-Hotel-Receptionist.jpg",
-      label: "Uomo ",
+      label: "Uomo",
     },
     {
       id: "img2",
       url: "https://thumbs.dreamstime.com/b/receptionist-hotel-front-desk-picture-smiling-166305860.jpg",
-      label: "Donna ",
+      label: "Donna",
     },
     {
       id: "img3",
       url: "https://via.placeholder.com/800x600.png?text=Immagine+3",
-      label: "Uomo ",
+      label: "Uomo",
     },
   ];
 
@@ -146,7 +149,7 @@ const ChatWithGP = () => {
   // Polling per verificare lo stato della conversazione
   const pollConversation = async (runId) => {
     let attempts = 0;
-    let delay = 500;
+    let delay = 200;
     const maxAttempts = 30;
     const executedFunctions = new Set();
 
@@ -249,14 +252,10 @@ const ChatWithGP = () => {
     }
   };
 
-  /*  
-    Funzione helper per dividere il testo in due tranche.
-    Se il testo supera una certa lunghezza, lo dividiamo in modo che la prima parte sia più consistente
-    (circa il 70% del testo) e la seconda il resto.
-  */
+  // Funzione helper per dividere il testo in due tranche.
   const splitTextIntoTranches = (text, minLength = 80) => {
     if (text.length <= minLength) return [text];
-    const target = Math.floor(text.length * 0.7);
+    const target = Math.floor(text.length * 0.3);
     let splitIndex = text.lastIndexOf(".", target);
     if (splitIndex === -1) splitIndex = text.lastIndexOf(";", target);
     if (splitIndex === -1) splitIndex = text.lastIndexOf(",", target);
@@ -267,13 +266,7 @@ const ChatWithGP = () => {
     return [firstTranche, secondTranche];
   };
 
-  /*  
-    generateAvatarVideo:
-      - Separa il testo in due tranche se necessario.
-      - Invia entrambe le richieste in parallelo.
-      - Appena la richiesta della prima tranche (la parte più consistente) è pronta, aggiorna l'interfaccia.
-      - L'evento "onEnded" del video controllerà il passaggio al video della seconda tranche, se disponibile.
-  */
+  // Generazione del video con eventuale divisione in due tranche
   const generateAvatarVideo = async (inputText) => {
     setLoading(true);
     setErrorMessage(null);
@@ -284,7 +277,6 @@ const ChatWithGP = () => {
     const tranches = splitTextIntoTranches(inputText, 80);
 
     if (tranches.length === 1) {
-      // Caso testo breve: richiesta singola
       try {
         const res = await axios.post(
           "/api/openai/create-avatar-video",
@@ -311,7 +303,6 @@ const ChatWithGP = () => {
         setLoading(false);
       }
     } else {
-      // Caso testo lungo: inviamo entrambe le richieste in parallelo.
       const firstPromise = axios
         .post(
           "/api/openai/create-avatar-video",
@@ -350,10 +341,8 @@ const ChatWithGP = () => {
           return await pollForVideoUrl(videoId);
         });
 
-      // Avviaamo entrambe le richieste in parallelo.
       firstPromise
         .then((url) => {
-          // Appena il video della prima tranche è pronto, lo mostriamo.
           setVideoUrl(url);
         })
         .catch((err) => {
@@ -363,7 +352,6 @@ const ChatWithGP = () => {
 
       secondPromise
         .then((url) => {
-          // Salviamo l'URL della seconda tranche.
           setSecondVideoUrl(url);
         })
         .catch((err) => {
@@ -371,17 +359,16 @@ const ChatWithGP = () => {
           setErrorMessage("Errore nella generazione del video (seconda tranche).");
         })
         .finally(() => {
-          // Quando entrambe le richieste sono concluse, disattiviamo il loading.
           setLoading(false);
         });
     }
   };
 
-  // Funzione per il polling: attende e restituisce l'URL del video una volta disponibile
+  // Funzione per il polling del video
   const pollForVideoUrl = async (videoId) => {
     for (let i = 0; i < 30; i++) {
       try {
-        await new Promise((res) => setTimeout(res, 500));
+        await new Promise((res) => setTimeout(res, 100));
         const res = await axios.get(`/api/openai/create-avatar-video/${videoId}`);
         if (res.data.videoUrl) {
           return res.data.videoUrl;
@@ -393,8 +380,7 @@ const ChatWithGP = () => {
     throw new Error("Il video non è pronto dopo diversi tentativi.");
   };
 
-  // Handler per l'evento "onEnded" del video:
-  // Quando il primo video finisce, se il video della seconda tranche è disponibile, lo visualizziamo.
+  // Handler per l'evento "onEnded" del video
   const handleVideoEnded = () => {
     setFirstVideoEnded(true);
     if (secondVideoUrl) {
@@ -413,177 +399,428 @@ const ChatWithGP = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-900 text-white">
+    <div className="flex flex-col h-screen bg-gray-900">
       {/* Header */}
-      <header className="bg-gray-800 px-6 py-4 flex items-center justify-between shadow-md">
-        <h1 className="text-3xl font-extrabold">Assistente Virtuale</h1>
-        <button
-          onClick={createNewThread}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-          aria-label="Crea nuovo thread"
-        >
-          Nuova Conversazione
-        </button>
+      <header className="bg-gray-800 px-6 py-4 flex items-center justify-between shadow-lg border-b border-gray-700">
+        <div className="flex items-center gap-3">
+          {/* Bottone per aprire il menu mobile (visibile solo su mobile) */}
+          <button
+            className="md:hidden text-gray-300 hover:text-white"
+            onClick={() => setShowMobileMenu(true)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" />
+            </svg>
+          </button>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+            Virtual Assistant
+          </h1>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Pulsante microfono per mobile (visibile solo su mobile) */}
+          <button
+            onClick={toggleListening}
+            className={`md:hidden w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+              isListening
+                ? "bg-red-500 hover:bg-red-600"
+                : "bg-blue-500 hover:bg-blue-600"
+            }`}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6 text-white"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              {isListening ? (
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 002 0V8a1 1 0 00-1-1z"
+                  clipRule="evenodd"
+                />
+              ) : (
+                <path
+                  fillRule="evenodd"
+                  d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                  clipRule="evenodd"
+                />
+              )}
+            </svg>
+          </button>
+          <button
+            onClick={createNewThread}
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 rounded-full transition-all transform hover:scale-105 text-white font-medium"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            New Chat
+          </button>
+        </div>
       </header>
-  
-      <div className="flex flex-col md:flex-row flex-grow overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-full md:w-1/4 bg-gray-800 p-6 border-b md:border-b-0 md:border-r border-gray-700 overflow-y-auto">
-          <MicrophoneControl
-            onToggleListening={toggleListening}
-            onNewThread={createNewThread}
-          />
-          <div className="mt-6">
-            <h3 className="text-xl font-semibold mb-3">Seleziona Immagine</h3>
-            {imageOptions.map((option) => (
-              <label key={option.id} className="flex items-center mb-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="image"
-                  value={option.url}
-                  checked={selectedImage === option.url}
-                  onChange={() => setSelectedImage(option.url)}
-                  className="mr-2"
-                />
-                <img
-                  src={option.url}
-                  alt={option.label}
-                  className="w-10 h-10 rounded-full mr-2 object-cover"
-                />
-                <span className="text-sm">{option.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="mt-6">
-            <h3 className="text-xl font-semibold mb-3">Seleziona Voce</h3>
-            {voiceOptions.map((option) => (
-              <label key={option.id} className="flex items-center mb-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="voice"
-                  value={option.value}
-                  checked={selectedVoice === option.value}
-                  onChange={() => setSelectedVoice(option.value)}
-                  className="mr-2"
-                />
-                <span className="text-sm">{option.label}</span>
-              </label>
-            ))}
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar per desktop (visibile solo da md in su) */}
+        <aside className="hidden md:flex w-80 bg-gray-800 border-r border-gray-700 flex-col">
+          <div className="p-6 space-y-6">
+            {/* Controllo microfono (per desktop, in quanto su mobile è disponibile nell'header) */}
+            <div className="flex flex-col items-center gap-4 p-4 bg-gray-700 rounded-lg">
+              <button
+                onClick={toggleListening}
+                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all ${
+                  isListening
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-blue-500 hover:bg-blue-600"
+                }`}
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-8 w-8 text-white"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  {isListening ? (
+                    <path
+                      fillRule="evenodd"
+                      d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 002 0V8a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  ) : (
+                    <path
+                      fillRule="evenodd"
+                      d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z"
+                      clipRule="evenodd"
+                    />
+                  )}
+                </svg>
+              </button>
+              <span className="text-sm font-medium text-gray-300">
+                {isListening ? "Recording..." : "Click to speak"}
+              </span>
+            </div>
+
+            {/* Selezione immagine */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-300">Select Avatar</h3>
+              <div className="grid gap-3">
+                {imageOptions.map((option) => (
+                  <label
+                    key={option.id}
+                    className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all ${
+                      selectedImage === option.url
+                        ? "bg-blue-500/20 border border-blue-500"
+                        : "hover:bg-gray-700"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="image"
+                      value={option.url}
+                      checked={selectedImage === option.url}
+                      onChange={() => setSelectedImage(option.url)}
+                      className="hidden"
+                    />
+                    <img
+                      src={option.url}
+                      alt={option.label}
+                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-600"
+                    />
+                    <span className="text-sm text-gray-300">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Selezione voce */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-300">Select Voice</h3>
+              <div className="grid gap-3">
+                {voiceOptions.map((option) => (
+                  <label
+                    key={option.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                      selectedVoice === option.value
+                        ? "bg-blue-500/20 border border-blue-500"
+                        : "hover:bg-gray-700"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="voice"
+                      value={option.value}
+                      checked={selectedVoice === option.value}
+                      onChange={() => setSelectedVoice(option.value)}
+                      className="hidden"
+                    />
+                    <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-white"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-sm text-gray-300">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </aside>
-  
-        {/* Area principale: Video e Chat */}
-        <main className="w-full md:w-3/4 flex flex-col">
-          {/* Video Section */}
-          <div className="relative flex-grow bg-black flex justify-center items-center">
-            {videoUrl ? (
-              <video
-                className="w-full h-full object-cover rounded-lg transition-all duration-500"
-                src={videoUrl}
-                autoPlay
-                controls={false}
-                onEnded={handleVideoEnded}
-              />
-            ) : (
-              <video
-                src="/mantalk.mp4"
-                className="w-full h-full object-cover rounded-lg"
-                loop
-                muted
-                autoPlay
-              />
-            )}
+
+        {/* Area principale */}
+        <main className="flex-1 flex flex-col">
+          {/* Sezione video */}
+          <div className="relative bg-black aspect-video">
+            <video
+              className="w-full h-full object-cover"
+              src={videoUrl || "/mantalk.mp4"}
+              autoPlay
+              controls={false}
+              onEnded={handleVideoEnded}
+              loop={!videoUrl}
+              muted={!videoUrl}
+            />
             {loading && (
-              <div className="absolute inset-0 flex justify-center items-center bg-black bg-opacity-70 transition-opacity duration-300">
-                <svg
-                  className="animate-spin h-12 w-12 text-purple-500"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+                <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
               </div>
             )}
           </div>
-  
-          {/* Chat Section */}
+
+          {/* Chat */}
           <div
             ref={chatContainerRef}
-            className="bg-gray-800 p-4 overflow-y-auto flex flex-col gap-2 max-h-60 scrollbar-thin scrollbar-thumb-gray-600"
+            className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
           >
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`p-3 rounded-lg max-w-[70%] transition-all duration-300 ${
-                  msg.role === "assistant" ? "bg-gray-700 text-left self-start" : "bg-blue-500 text-white text-right self-end"
+                className={`flex ${
+                  msg.role === "assistant" ? "justify-start" : "justify-end"
                 }`}
               >
-                {msg.content[0]?.text?.value}
+                <div
+                  className={`max-w-[70%] p-4 rounded-2xl shadow-lg ${
+                    msg.role === "assistant"
+                      ? "bg-gray-700 rounded-tl-none"
+                      : "bg-blue-600 rounded-tr-none"
+                  }`}
+                >
+                  <p className="text-white">{msg.content[0]?.text?.value}</p>
+                </div>
               </div>
             ))}
           </div>
-  
-          {/* Input Area */}
-          <form onSubmit={handleInputSubmit} className="flex p-4 bg-gray-700">
-            <input
-              type="text"
-              className="flex-grow p-2 rounded-l-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors"
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              placeholder="Scrivi un messaggio..."
-              aria-label="Inserisci messaggio"
-            />
-            <button
-              type="submit"
-              className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-r-lg transition-colors"
-              aria-label="Invia messaggio"
-            >
-              Invia
-            </button>
+
+          {/* Input area */}
+          <form
+            onSubmit={handleInputSubmit}
+            className="p-4 bg-gray-800 border-t border-gray-700"
+          >
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                placeholder="Type your message..."
+                className="flex-1 px-4 py-3 bg-gray-700 rounded-full text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              />
+              <button
+                type="submit"
+                disabled={!userInput.trim()}
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-full text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Send
+              </button>
+            </div>
           </form>
         </main>
       </div>
-  
-      {/* Modal per il PDF */}
-      {showModal && (
-        <div className="fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg transform transition-all duration-300">
-            <p className="text-green-600 mb-4 font-semibold">
-              Prenotazione effettuata con successo!
-            </p>
-            <a
-              href={pdfLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-500 underline font-medium"
-            >
-              Scarica il PDF
-            </a>
-            <button
-              onClick={() => setShowModal(false)}
-              className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors"
-            >
-              Chiudi
-            </button>
+
+      {/* Menu Mobile per le impostazioni (avatar e voce) */}
+      {showMobileMenu && (
+        <div className="fixed inset-0 bg-black/50 flex justify-end z-50">
+          <div className="w-72 bg-gray-800 h-full p-6 overflow-y-auto">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold text-white">Settings</h2>
+              <button onClick={() => setShowMobileMenu(false)}>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-6 w-6 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            {/* Selezione immagine */}
+            <div className="mt-4">
+              <h3 className="text-lg font-semibold text-gray-300">Select Avatar</h3>
+              <div className="grid gap-3 mt-2">
+                {imageOptions.map((option) => (
+                  <label
+                    key={option.id}
+                    className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-all ${
+                      selectedImage === option.url
+                        ? "bg-blue-500/20 border border-blue-500"
+                        : "hover:bg-gray-700"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="image"
+                      value={option.url}
+                      checked={selectedImage === option.url}
+                      onChange={() => setSelectedImage(option.url)}
+                      className="hidden"
+                    />
+                    <img
+                      src={option.url}
+                      alt={option.label}
+                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-600"
+                    />
+                    <span className="text-sm text-gray-300">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Selezione voce */}
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-gray-300">Select Voice</h3>
+              <div className="grid gap-3 mt-2">
+                {voiceOptions.map((option) => (
+                  <label
+                    key={option.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                      selectedVoice === option.value
+                        ? "bg-blue-500/20 border border-blue-500"
+                        : "hover:bg-gray-700"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="voice"
+                      value={option.value}
+                      checked={selectedVoice === option.value}
+                      onChange={() => setSelectedVoice(option.value)}
+                      className="hidden"
+                    />
+                    <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center">
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4 text-white"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    </div>
+                    <span className="text-sm text-gray-300">{option.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
-  
-      {errorMessage && (
-        <div className="bg-red-600 text-white py-2 text-center">
-          {errorMessage}
+
+      {/* Modal PDF */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full shadow-xl">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-green-500 rounded-full mx-auto flex items-center justify-center mb-4">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-8 w-8 text-white"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">
+                Booking Confirmed!
+              </h3>
+              <p className="text-gray-300 mb-6">
+                Your booking has been successfully processed.
+              </p>
+              <div className="flex gap-3 justify-center">
+                <a
+                  href={pdfLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium transition-all"
+                >
+                  Download PDF
+                </a>
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium transition-all"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
-  
-      {/* Footer */}
-      <footer className="bg-gray-800 px-6 py-3 text-center text-sm text-gray-400">
-        © {new Date().getFullYear()} Il Tuo Progetto
-      </footer>
+
+      {/* Toast error */}
+      {errorMessage && (
+        <div className="fixed bottom-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg">
+          <p className="flex items-center gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {errorMessage}
+          </p>
+        </div>
+      )}
     </div>
   );
-  
 };
 
 export default ChatWithGP;
