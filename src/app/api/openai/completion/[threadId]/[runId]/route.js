@@ -3,7 +3,7 @@ import axios from 'axios';
 
 const openAIKey = process.env.OPENAI_KEY;
 const MAX_RETRIES = 3;
-const TIMEOUT = 5000; // Timeout di 5 secondi
+const TIMEOUT = 1000; // Timeout di 5 secondi
 
 // Funzione per controllare lo stato della run con retry
 async function checkRunStatusWithRetry(threadId, runId, retries = MAX_RETRIES) {

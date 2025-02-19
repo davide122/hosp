@@ -65,6 +65,17 @@ const ChatWithGP = () => {
     else createNewThread();
   }, []);
 
+
+
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => {
+        setErrorMessage(null);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
+  
   // Auto-scroll della chat al variare dei messaggi
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -149,7 +160,7 @@ const ChatWithGP = () => {
   // Polling per verificare lo stato della conversazione
   const pollConversation = async (runId) => {
     let attempts = 0;
-    let delay = 200;
+    let delay = 100;
     const maxAttempts = 30;
     const executedFunctions = new Set();
 
@@ -289,7 +300,8 @@ const ChatWithGP = () => {
           },
           { headers: { "Content-Type": "application/json" } }
         );
-        const videoId = res.data.videoId;
+        // const videoId = res.data.videoId;
+        const videoId = "tlk_I26uZKlFeRndFsZi0GE71";
         if (!videoId) throw new Error("ID del video non ricevuto.");
         const url = await pollForVideoUrl(videoId);
         setVideoUrl(url);
@@ -366,7 +378,7 @@ const ChatWithGP = () => {
 
   // Funzione per il polling del video
   const pollForVideoUrl = async (videoId) => {
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 100; i++) {
       try {
         await new Promise((res) => setTimeout(res, 100));
         const res = await axios.get(`/api/openai/create-avatar-video/${videoId}`);
@@ -399,10 +411,10 @@ const ChatWithGP = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900">
+    <div className="flex flex-col  bg-gray-900">
       {/* Header */}
-      <header className="bg-gray-800 px-6 py-4 flex items-center justify-between shadow-lg border-b border-gray-700">
-        <div className="flex items-center gap-3">
+      <header className="bg-gray-800 px-6 py-4 flex items-center justify-between shadow-lg  border-gray-700">
+        <div className="flex items-center w-full">
           {/* Bottone per aprire il menu mobile (visibile solo su mobile) */}
           <button
             className="md:hidden text-gray-300 hover:text-white"
@@ -418,7 +430,7 @@ const ChatWithGP = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 8h16M4 16h16" />
             </svg>
           </button>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+          <h1 className="text-1xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
             Virtual Assistant
           </h1>
         </div>
@@ -426,7 +438,7 @@ const ChatWithGP = () => {
           {/* Pulsante microfono per mobile (visibile solo su mobile) */}
           <button
             onClick={toggleListening}
-            className={`md:hidden w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+            className={`md:hidden w-10 h-10 rounded-full flex items-center justify-center transition-all microfono ${
               isListening
                 ? "bg-red-500 hover:bg-red-600"
                 : "bg-blue-500 hover:bg-blue-600"
@@ -532,6 +544,7 @@ const ChatWithGP = () => {
                       name="image"
                       value={option.url}
                       checked={selectedImage === option.url}
+                      disabled={loading}
                       onChange={() => setSelectedImage(option.url)}
                       className="hidden"
                     />
@@ -611,46 +624,48 @@ const ChatWithGP = () => {
 
           {/* Chat */}
           <div
-            ref={chatContainerRef}
-            className="flex-1 overflow-y-auto px-6 py-4 space-y-4"
-          >
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${
-                  msg.role === "assistant" ? "justify-start" : "justify-end"
-                }`}
-              >
-                <div
-                  className={`max-w-[70%] p-4 rounded-2xl shadow-lg ${
-                    msg.role === "assistant"
-                      ? "bg-gray-700 rounded-tl-none"
-                      : "bg-blue-600 rounded-tr-none"
-                  }`}
-                >
-                  <p className="text-white">{msg.content[0]?.text?.value}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+  ref={chatContainerRef}
+  className="overflow-y-auto px-6 py-4 space-y-4 max-h-[calc(60vh-300px)]"
+>
+  {messages.map((msg) => (
+    <div
+      key={msg.id}
+      className={`flex ${
+        msg.role === "assistant" ? "justify-start" : "justify-end"
+      }`}
+    >
+      <div
+        className={`max-w-[70%] p-4 rounded-2xl shadow-lg ${
+          msg.role === "assistant"
+            ? "bg-gray-700 rounded-tl-none"
+            : "bg-blue-600 rounded-tr-none"
+        }`}
+      >
+        <p className="text-white">{msg.content[0]?.text?.value}</p>
+      </div>
+    </div>
+  ))}
+</div>
+
 
           {/* Input area */}
           <form
             onSubmit={handleInputSubmit}
             className="p-4 bg-gray-800 border-t border-gray-700"
           >
-            <div className="flex gap-2">
+            <div className="gap-2">
               <input
                 type="text"
                 value={userInput}
                 onChange={(e) => setUserInput(e.target.value)}
                 placeholder="Type your message..."
-                className="flex-1 px-4 py-3 bg-gray-700 rounded-full text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                className="flex-1 px-4 py-3 bg-gray-700 rounded-full text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all w-full my-2"
               />
               <button
                 type="submit"
-                disabled={!userInput.trim()}
-                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-full text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading || !userInput.trim()} // Anche il pulsante è disabilitato se loading è true
+
+                className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-full text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed w-full "
               >
                 Send
               </button>
@@ -661,7 +676,7 @@ const ChatWithGP = () => {
 
       {/* Menu Mobile per le impostazioni (avatar e voce) */}
       {showMobileMenu && (
-        <div className="fixed inset-0 bg-black/50 flex justify-end z-50">
+        <div className="fixed inset-0 bg-black/50 flex justify-end z-50 menu">
           <div className="w-72 bg-gray-800 h-full p-6 overflow-y-auto">
             <div className="flex justify-between items-center">
               <h2 className="text-xl font-bold text-white">Settings</h2>

@@ -87,3 +87,16 @@ body {
 .relative > svg {
   z-index: -1;
 }
+
+.microfono{
+ position: relative !important;
+ bottom: -300px;
+ left: 100px;
+ z-index: 1000;
+ padding: 10px;
+
+}
+
+.menu{
+  z-index: 10000000000;
+}
