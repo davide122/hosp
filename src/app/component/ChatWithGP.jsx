@@ -610,10 +610,10 @@ const ChatWithGP = () => {
 
 
           {/* Input Area */}
-          <div className="p-4 lg:p-6 border-t border-gray-700/50">
+          <div className="p-2 lg:p-6 border-t border-gray-700/50 ">
             <form 
               onSubmit={handleInputSubmit}
-              className="flex items-center gap-3"
+              className="flex items-center gap-1"
             >
               <button
                 type="button"
@@ -645,7 +645,7 @@ const ChatWithGP = () => {
               <button
                 type="submit"
                 disabled={loading || !userInput.trim()}
-                className={`px-6 py-3 rounded-xl font-medium transition-all duration-300
+                className={`px-3 py-3 rounded-xl font-small transition-all duration-300
                   ${loading || !userInput.trim()
                     ? 'bg-gray-700/50 text-gray-400 cursor-not-allowed'
                     : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90'}
