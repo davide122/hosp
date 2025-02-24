@@ -14,8 +14,9 @@ const ChatWithGP = () => {
   const [showModal, setShowModal] = useState(false);
   const [pdfLink, setPdfLink] = useState(null);
   const [userInput, setUserInput] = useState("");
-
-  // Stati per selezione immagine e voce
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isVideoGenerating, setIsVideoGenerating] = useState(false);
   const [selectedImage, setSelectedImage] = useState(
     "https://www.abeaform.it/wp-content/uploads/2018/11/Abea-Form-Corso-Hotel-Receptionist.jpg"
   );
@@ -38,16 +39,11 @@ const ChatWithGP = () => {
       url: "https://thumbs.dreamstime.com/b/receptionist-hotel-front-desk-picture-smiling-166305860.jpg",
       label: "Donna ",
     },
-    {
-      id: "img3",
-      url: "https://via.placeholder.com/800x600.png?text=Immagine+3",
-      label: "Uomo ",
-    },
+    
   ];
 
   const voiceOptions = [
-    { id: "voice1", value: "nPczCjzI2devNBz1zQrb", label: "Uomo 1" },
-    { id: "voice2", value: "PSp7S6ST9fDNXDwEzX0m", label: "Uomo 2" },
+    { id: "voice1", value: "nPczCjzI2devNBz1zQrb", label: "Uomo" },
     { id: "voice3", value: "Kq9pDHHIMmJsG9PEqOtv", label: "Donna" },
   ];
 
@@ -69,18 +65,29 @@ const ChatWithGP = () => {
     }
   }, [messages]);
 
+
+  useEffect(() => {
+    if (errorMessage) {
+      const timer = setTimeout(() => {
+        setErrorMessage(null);
+      }, 3000);
+  
+      return () => clearTimeout(timer);
+    }
+  }, [errorMessage]);
+  
   // Creazione di un nuovo thread
   const createNewThread = async () => {
     try {
+      setMessages([]); // Pulizia della chat quando si crea un nuovo thread
       const res = await axios.post("/api/openai/start-thread");
       if (res.data && res.data.id) {
         setThreadId(res.data.id);
         sessionStorage.setItem("threadId", res.data.id);
-      } else {
-        console.error("Errore: Nessun ID thread ricevuto");
       }
     } catch (error) {
       console.error("Errore nella creazione del thread:", error);
+      setErrorMessage("Errore nella creazione di una nuova chat");
     }
   };
 
@@ -229,6 +236,16 @@ const ChatWithGP = () => {
     }
   };
 
+  const getPlaceholderVideo = () => {
+    if (selectedImage === imageOptions[1].url) {
+      // donna
+      return "/placeholder/donnaplaceholder.mp4";
+    }
+    // uomo
+    return "/placeholder/uomoplaceholder.mp4";
+  };
+  
+  
   // Recupero dei messaggi della conversazione
   const fetchMessages = async () => {
     try {
@@ -256,7 +273,7 @@ const ChatWithGP = () => {
   */
   const splitTextIntoTranches = (text, minLength = 80) => {
     if (text.length <= minLength) return [text];
-    const target = Math.floor(text.length * 0.7);
+    const target = Math.floor(text.length * 0.3);
     let splitIndex = text.lastIndexOf(".", target);
     if (splitIndex === -1) splitIndex = text.lastIndexOf(";", target);
     if (splitIndex === -1) splitIndex = text.lastIndexOf(",", target);
@@ -275,6 +292,8 @@ const ChatWithGP = () => {
       - L'evento "onEnded" del video controllerà il passaggio al video della seconda tranche, se disponibile.
   */
   const generateAvatarVideo = async (inputText) => {
+    setIsVideoGenerating(true);
+
     setLoading(true);
     setErrorMessage(null);
     setVideoUrl(null);
@@ -379,7 +398,7 @@ const ChatWithGP = () => {
 
   // Funzione per il polling: attende e restituisce l'URL del video una volta disponibile
   const pollForVideoUrl = async (videoId) => {
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 120; i++) {
       try {
         await new Promise((res) => setTimeout(res, 500));
         const res = await axios.get(`/api/openai/create-avatar-video/${videoId}`);
@@ -413,175 +432,277 @@ const ChatWithGP = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-900 text-white">
-      {/* Header */}
-      <header className="bg-gray-800 px-6 py-4 flex items-center justify-between shadow-md">
-        <h1 className="text-3xl font-extrabold">Assistente Virtuale</h1>
-        <button
-          onClick={createNewThread}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-          aria-label="Crea nuovo thread"
-        >
-          Nuova Conversazione
-        </button>
-      </header>
-  
-      <div className="flex flex-col md:flex-row flex-grow overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-full md:w-1/4 bg-gray-800 p-6 border-b md:border-b-0 md:border-r border-gray-700 overflow-y-auto">
-          <MicrophoneControl
-            onToggleListening={toggleListening}
-            onNewThread={createNewThread}
-          />
-          <div className="mt-6">
-            <h3 className="text-xl font-semibold mb-3">Seleziona Immagine</h3>
-            {imageOptions.map((option) => (
-              <label key={option.id} className="flex items-center mb-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="image"
-                  value={option.url}
-                  checked={selectedImage === option.url}
-                  onChange={() => setSelectedImage(option.url)}
-                  className="mr-2"
-                />
-                <img
-                  src={option.url}
-                  alt={option.label}
-                  className="w-10 h-10 rounded-full mr-2 object-cover"
-                />
-                <span className="text-sm">{option.label}</span>
-              </label>
-            ))}
-          </div>
-          <div className="mt-6">
-            <h3 className="text-xl font-semibold mb-3">Seleziona Voce</h3>
-            {voiceOptions.map((option) => (
-              <label key={option.id} className="flex items-center mb-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="voice"
-                  value={option.value}
-                  checked={selectedVoice === option.value}
-                  onChange={() => setSelectedVoice(option.value)}
-                  className="mr-2"
-                />
-                <span className="text-sm">{option.label}</span>
-              </label>
-            ))}
-          </div>
-        </aside>
-  
-        {/* Area principale: Video e Chat */}
-        <main className="w-full md:w-3/4 flex flex-col">
-          {/* Video Section */}
-          <div className="relative flex-grow bg-black flex justify-center items-center">
-            {videoUrl ? (
-              <video
-                className="w-full h-full object-cover rounded-lg transition-all duration-500"
-                src={videoUrl}
-                autoPlay
-                controls={false}
-                onEnded={handleVideoEnded}
-              />
-            ) : (
-              <video
-                src="/mantalk.mp4"
-                className="w-full h-full object-cover rounded-lg"
-                loop
-                muted
-                autoPlay
-              />
-            )}
-            {loading && (
-              <div className="absolute inset-0 flex justify-center items-center bg-black bg-opacity-70 transition-opacity duration-300">
-                <svg
-                  className="animate-spin h-12 w-12 text-purple-500"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-              </div>
-            )}
-          </div>
-  
-          {/* Chat Section */}
-          <div
-            ref={chatContainerRef}
-            className="bg-gray-800 p-4 overflow-y-auto flex flex-col gap-2 max-h-60 scrollbar-thin scrollbar-thumb-gray-600"
-          >
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`p-3 rounded-lg max-w-[70%] transition-all duration-300 ${
-                  msg.role === "assistant" ? "bg-gray-700 text-left self-start" : "bg-blue-500 text-white text-right self-end"
-                }`}
-              >
-                {msg.content[0]?.text?.value}
-              </div>
-            ))}
-          </div>
-  
-          {/* Input Area */}
-          <form onSubmit={handleInputSubmit} className="flex p-4 bg-gray-700">
-            <input
-              type="text"
-              className="flex-grow p-2 rounded-l-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors"
-              value={userInput}
-              onChange={(e) => setUserInput(e.target.value)}
-              placeholder="Scrivi un messaggio..."
-              aria-label="Inserisci messaggio"
-            />
-            <button
-              type="submit"
-              className="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-r-lg transition-colors"
-              aria-label="Invia messaggio"
+    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-gray-800">
+    {/* Mobile Header */}
+    <header className="lg:hidden flex items-center justify-between px-6 py-4 bg-gray-800/80 backdrop-blur-sm">
+      <button 
+        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        className="rounded-full p-2 hover:bg-gray-700/50 transition-colors"
+      >
+        <svg className="w-6 h-6 text-gray-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <h1 className="text-xl font-semibold text-gray-100">Virtual Assistant</h1>
+      <div className="w-6" />
+    </header>
+
+    <div className="flex flex-1 overflow-hidden">
+      {/* Sidebar */}
+      <aside className={`
+        fixed lg:relative lg:flex
+        inset-y-0 left-0 z-50
+        w-72 bg-gray-800/95 backdrop-blur-lg
+        transform lg:transform-none transition-all duration-300 ease-in-out
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="flex flex-col h-full p-6">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+              Settings
+            </h2>
+            <button 
+              onClick={() => setIsSidebarOpen(false)}
+              className="lg:hidden rounded-full p-2 hover:bg-gray-700/50 text-gray-400 hover:text-white transition-colors"
             >
-              Invia
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
             </button>
-          </form>
-        </main>
-      </div>
+          </div>
+
+          {/* Avatar Selection */}
+          <div className="mb-8">
+            <h3 className="text-sm font-medium text-gray-400 mb-4">Choose Avatar</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {imageOptions.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => setSelectedImage(option.url)}
+                  className={`group relative rounded-xl overflow-hidden transition-all duration-300
+                    ${selectedImage === option.url 
+                      ? 'ring-2 ring-blue-500 scale-105' 
+                      : 'hover:scale-105'}
+                  `}
+                >
+                  <img
+                    src={option.url}
+                    alt={option.label}
+                    className="w-full h-28 object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="absolute bottom-2 left-2 text-sm text-white font-medium">
+                      {option.label}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Voice Selection */}
+          <div className="mb-8">
+            <h3 className="text-sm font-medium text-gray-400 mb-4">Choose Voice</h3>
+            <div className="space-y-3">
+              {voiceOptions.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => setSelectedVoice(option.value)}
+                  className={`w-full px-4 py-3 rounded-xl text-left transition-all duration-300
+                    ${selectedVoice === option.value 
+                      ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' 
+                      : 'bg-gray-700/50 text-gray-300 hover:bg-gray-700'}
+                  `}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={createNewThread}
+            className="mt-auto w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:opacity-90 transition-opacity"
+          >
+            New Conversation
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col max-h-screen overflow-hidden">
+        {/* Video Container */}
+        <div className="relative w-full h-[45vh] lg:h-[65vh] bg-black/90 rounded-b-3xl overflow-hidden">
+        {videoUrl ? (
+  <video
+    className="w-full h-full object-cover"
+    src={videoUrl}
+    autoPlay
+    controls={false}
+    onEnded={handleVideoEnded}
+  />
+) : (
+  <video
+  className="w-full h-full object-cover"
+  src={getPlaceholderVideo()}
+  autoPlay
+  muted
+  loop
   
-      {/* Modal per il PDF */}
-      {showModal && (
-        <div className="fixed inset-0 flex justify-center items-center bg-black bg-opacity-50 z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg transform transition-all duration-300">
-            <p className="text-green-600 mb-4 font-semibold">
-              Prenotazione effettuata con successo!
-            </p>
+  controls={false}
+/>
+)}
+
+  {loading && (
+    <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      {/* Loading spinner o quello che preferisci */}
+      <div className="relative">
+        <div className="w-12 h-12 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-gray-200 border-t-purple-500 rounded-full animate-spin"></div>
+        </div>
+      </div>
+    </div>
+  )}
+</div>
+
+
+        {/* Chat Container */}
+        <div className="flex-1 flex flex-col bg-gray-800/50 backdrop-blur-md">
+        <div 
+  ref={chatContainerRef}
+  className="
+    flex-1
+    px-4 lg:px-6 py-4
+    space-y-4
+    overflow-y-auto
+    max-h-[400px]           /* Limita l'altezza massima */
+    scrollbar-thin          /* Se hai il plugin scrollbar di Tailwind */
+    scrollbar-track-gray-800
+    scrollbar-thumb-gray-500
+  "
+>
+  {messages.map((msg) => (
+    <div
+      key={msg.id}
+      className={`flex ${msg.role === 'assistant' ? 'justify-start' : 'justify-end'}`}
+    >
+      <div 
+        className={`max-w-[85%] lg:max-w-[70%] rounded-2xl px-5 py-3 
+          ${msg.role === 'assistant' 
+            ? 'bg-gray-700/70 text-white rounded-tr-2xl rounded-tl-none' 
+            : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-tl-2xl rounded-tr-none'
+          }
+        `}
+      >
+        {msg.content[0]?.text?.value}
+      </div>
+    </div>
+  ))}
+  {isTyping && (
+    <div className="flex justify-start">
+      <div className="bg-gray-700/70 text-white rounded-2xl px-4 py-2">
+        <span className="animate-pulse">...</span>
+      </div>
+    </div>
+  )}
+</div>
+
+
+          {/* Input Area */}
+          <div className="p-4 lg:p-6 border-t border-gray-700/50">
+            <form 
+              onSubmit={handleInputSubmit}
+              className="flex items-center gap-3"
+            >
+              <button
+                type="button"
+                onClick={toggleListening}
+                disabled={loading}
+                className={`p-3 rounded-xl transition-all duration-300
+                  ${isListening 
+                    ? 'bg-red-500 hover:bg-red-600' 
+                    : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90'}
+                  ${loading ? 'opacity-50 cursor-not-allowed' : ''}
+                `}
+              >
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+                  />
+                </svg>
+              </button>
+
+              <input
+                type="text"
+                value={userInput}
+                onChange={(e) => setUserInput(e.target.value)}
+                disabled={loading}
+                placeholder={loading ? "Assistant is thinking..." : "Type your message..."}
+                className="flex-1 px-5 py-3 bg-gray-700/50 text-white rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              />
+              
+              <button
+                type="submit"
+                disabled={loading || !userInput.trim()}
+                className={`px-6 py-3 rounded-xl font-medium transition-all duration-300
+                  ${loading || !userInput.trim()
+                    ? 'bg-gray-700/50 text-gray-400 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90'}
+                `}
+              >
+                Send
+              </button>
+            </form>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    {/* Modal */}
+    {showModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
+          <h3 className="text-xl font-semibold text-gray-900">
+            Booking Confirmed
+          </h3>
+          <p className="mt-2 text-gray-600">
+            Your booking has been successfully confirmed!
+          </p>
+          <div className="mt-6 flex justify-end gap-3">
+            <button
+              onClick={() => setShowModal(false)}
+              className="px-4 py-2 rounded-xl text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              Close
+            </button>
             <a
               href={pdfLink}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-500 underline font-medium"
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90 transition-opacity"
             >
-              Scarica il PDF
+              Download PDF
             </a>
-            <button
-              onClick={() => setShowModal(false)}
-              className="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors"
-            >
-              Chiudi
-            </button>
           </div>
         </div>
-      )}
-  
-      {errorMessage && (
-        <div className="bg-red-600 text-white py-2 text-center">
-          {errorMessage}
-        </div>
-      )}
-  
-      {/* Footer */}
-      <footer className="bg-gray-800 px-6 py-3 text-center text-sm text-gray-400">
-        © {new Date().getFullYear()} Il Tuo Progetto
-      </footer>
-    </div>
+      </div>
+    )}
+
+    {/* Error Toast */}
+    {errorMessage && (
+  <div className="fixed bottom-4 right-4 px-6 py-3 rounded-xl bg-red-500 text-white shadow-lg animate-fade-in flex items-center gap-4">
+    <span>{errorMessage}</span>
+    <button
+      onClick={() => setErrorMessage(null)}
+      className="focus:outline-none hover:text-gray-200 transition-colors"
+    >
+      ✕
+    </button>
+  </div>
+)}
+
+  </div>
   );
   
 };
