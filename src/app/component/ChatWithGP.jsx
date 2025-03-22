@@ -1,55 +1,54 @@
-"use client";
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import MicrophoneControl from "./MicrophoneControl";
+import { TokenUsageDisplay } from "../components/TokenUsageDisplay";
 
-const ChatWithGP = () => {
+const ChatWithGP = ({ onTokenUsageUpdate }) => {
   // Stati principali
   const [isListening, setIsListening] = useState(false);
   const [messages, setMessages] = useState([]);
   const [threadId, setThreadId] = useState(null);
+  const [runId, setRunId] = useState(null); // Stato per il run corrente
   const [loading, setLoading] = useState(false);
-  const [videoUrl, setVideoUrl] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [pdfLink, setPdfLink] = useState(null);
   const [userInput, setUserInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-  const [isVideoGenerating, setIsVideoGenerating] = useState(false);
+  // Stato per l'audio generato da ElevenLabs
+  const [audioUrl, setAudioUrl] = useState(null);
+  // Stato per l'immagine/avatar e la voce selezionata
   const [selectedImage, setSelectedImage] = useState(
     "https://www.abeaform.it/wp-content/uploads/2018/11/Abea-Form-Corso-Hotel-Receptionist.jpg"
   );
-  const [selectedVoice, setSelectedVoice] = useState("nPczCjzI2devNBz1zQrb");
-
-  // Stato per memorizzare l'URL della seconda tranche
-  const [secondVideoUrl, setSecondVideoUrl] = useState(null);
-  // Stato per tracciare se il video della prima tranche è terminato
-  const [firstVideoEnded, setFirstVideoEnded] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState("21m00Tcm4TlvDq8ikWAM");
 
   // Array di opzioni per immagini e voci
   const imageOptions = [
     {
       id: "img1",
       url: "https://www.abeaform.it/wp-content/uploads/2018/11/Abea-Form-Corso-Hotel-Receptionist.jpg",
-      label: "Uomo ",
+      label: "Uomo",
     },
     {
       id: "img2",
       url: "https://thumbs.dreamstime.com/b/receptionist-hotel-front-desk-picture-smiling-166305860.jpg",
-      label: "Donna ",
+      label: "Donna",
     },
-    
   ];
 
   const voiceOptions = [
-    { id: "voice1", value: "nPczCjzI2devNBz1zQrb", label: "Uomo" },
-    { id: "voice3", value: "Kq9pDHHIMmJsG9PEqOtv", label: "Donna" },
+    { id: "voice1", value: "2zRM7PkgwBPiau2jvVXc", label: "Voce 1" },
+    { id: "voice2", value: "2zRM7PkgwBPiau2jvVXc", label: "Voce 2" },
+    { id: "voice3", value: "2zRM7PkgwBPiau2jvVXc", label: "Voce 3" },
   ];
 
-  // Riferimenti
+  // Riferimenti per riconoscimento vocale, chat e media
   const recognitionRef = useRef(null);
   const chatContainerRef = useRef(null);
+  const videoRef = useRef(null);
+  const audioRef = useRef(null);
 
   // All'avvio recuperiamo (o creiamo) il thread
   useEffect(() => {
@@ -58,28 +57,27 @@ const ChatWithGP = () => {
     else createNewThread();
   }, []);
 
-  // Auto-scroll della chat al variare dei messaggi
+  // Auto-scroll della chat
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [messages]);
 
-
   useEffect(() => {
     if (errorMessage) {
       const timer = setTimeout(() => {
         setErrorMessage(null);
       }, 3000);
-  
       return () => clearTimeout(timer);
     }
   }, [errorMessage]);
-  
-  // Creazione di un nuovo thread
+
   const createNewThread = async () => {
     try {
-      setMessages([]); // Pulizia della chat quando si crea un nuovo thread
+      setMessages([]);
+      // Resetta il run corrente quando crei un nuovo thread
+      setRunId(null);
       const res = await axios.post("/api/openai/start-thread");
       if (res.data && res.data.id) {
         setThreadId(res.data.id);
@@ -89,6 +87,30 @@ const ChatWithGP = () => {
       console.error("Errore nella creazione del thread:", error);
       setErrorMessage("Errore nella creazione di una nuova chat");
     }
+  };
+
+  // Gestore per "New Conversation"
+  const handleNewConversation = async () => {
+    // Se esiste un run attivo, lo canceliamo
+    if (runId && threadId) {
+      try {
+        await axios.post(`/api/openai/threads/${threadId}/runs/${runId}/cancel`);
+        console.log(`Run ${runId} cancellato con successo`);
+      } catch (error) {
+        console.error("Errore nella cancellazione del run:", error);
+      }
+    }
+    // Eliminiamo il thread corrente (anche se potrebbe non essere cancellato dal backend se già terminato)
+    if (threadId) {
+      try {
+        await axios.delete(`/api/openai/threads/${threadId}`);
+      } catch (error) {
+        console.error("Errore nell'eliminazione del thread:", error);
+      }
+      sessionStorage.removeItem("threadId");
+    }
+    // Creiamo un nuovo thread
+    createNewThread();
   };
 
   // Funzioni di riconoscimento vocale
@@ -123,12 +145,15 @@ const ChatWithGP = () => {
     isListening ? stopListening() : startListening();
   };
 
-  // Gestione dell'invio di un messaggio (sia testuale che vocale)
   const handleUserMessage = async (message) => {
     if (!threadId) return console.error("Thread ID non disponibile.");
     if (!message || message.trim() === "") return;
+    // Prevent sending messages during audio playback or loading
+    if (audioUrl || loading) {
+      setErrorMessage("Please wait for the assistant to finish speaking.");
+      return;
+    }
 
-    // Aggiunge immediatamente il messaggio utente nella chat
     setMessages((prev) => [
       ...prev,
       { id: Date.now(), role: "user", content: [{ text: { value: message } }] },
@@ -136,13 +161,34 @@ const ChatWithGP = () => {
 
     setLoading(true);
     try {
-      // Invia il messaggio al backend
       await axios.post(`/api/openai/messages/${threadId}`, { content: message });
-      // Avvia un nuovo run di conversazione
+      // Quando crei un run, salva anche il runId per poterlo cancellare se necessario
       const runRes = await axios.post(`/api/openai/runs/${threadId}`, {
-        assistantId: "asst_s1KQTKTvDmhHlxQ4q3MTeuAs",
+        assistantId: "asst_vtilXHOL59QkANctpsUjpO7b",
       });
+      if (runRes.data && runRes.data.id) {
+        setRunId(runRes.data.id);
+      }
       await pollConversation(runRes.data.id);
+      // Update token usage
+      if (runRes.data.usage) {
+        console.log('Token usage data received:', runRes.data.usage);
+        // Import the utility function
+        const { calculateTokenCost } = await import('../utils/tokenCost');
+        const costInfo = calculateTokenCost(runRes.data.usage);
+        console.log('Cost info calculated:', costInfo);
+        
+        const tokenData = {
+          promptTokens: runRes.data.usage.prompt_tokens,
+          completionTokens: runRes.data.usage.completion_tokens,
+          totalTokens: runRes.data.usage.total_tokens,
+          totalCost: costInfo.total
+        };
+        console.log('Updating token usage with:', tokenData);
+        onTokenUsageUpdate(tokenData);
+      } else {
+        console.log('No usage data available in the response');
+      }
     } catch (error) {
       console.error("Errore nell'invio del messaggio:", error);
       setErrorMessage("Errore nell'invio del messaggio.");
@@ -150,10 +196,9 @@ const ChatWithGP = () => {
     }
   };
 
-  // Polling per verificare lo stato della conversazione
   const pollConversation = async (runId) => {
     let attempts = 0;
-    let delay = 500;
+    let delay = 100;
     const maxAttempts = 30;
     const executedFunctions = new Set();
 
@@ -163,6 +208,21 @@ const ChatWithGP = () => {
           `/api/openai/completion/${threadId}/${runId}`
         );
         if (statusData.status === "completed") {
+          if (statusData.token_usage) {
+            console.log('Token usage data received:', statusData.token_usage);
+            const { calculateTokenCost } = await import('../utils/tokenCost');
+            const costInfo = calculateTokenCost(statusData.token_usage);
+            console.log('Cost info calculated:', costInfo);
+            
+            const tokenData = {
+              promptTokens: statusData.token_usage.prompt_tokens,
+              completionTokens: statusData.token_usage.completion_tokens,
+              totalTokens: statusData.token_usage.total_tokens,
+              totalCost: costInfo.total
+            };
+            console.log('Updating token usage with:', tokenData);
+            onTokenUsageUpdate(tokenData);
+          }
           await fetchMessages();
           break;
         } else if (
@@ -178,7 +238,7 @@ const ChatWithGP = () => {
           break;
         }
         await new Promise((res) => setTimeout(res, delay));
-        delay *= 1;
+        delay *= 2; // Implement exponential backoff
         attempts++;
       } catch (error) {
         console.error("Errore nel polling:", error);
@@ -190,7 +250,6 @@ const ChatWithGP = () => {
     setLoading(false);
   };
 
-  // Esecuzione delle chiamate a funzioni (tool calls)
   const executeToolCalls = async (toolCalls, runId, executedFunctions) => {
     if (!toolCalls?.length) return;
 
@@ -214,7 +273,6 @@ const ChatWithGP = () => {
     });
   };
 
-  // Chiamata generica al backend per eseguire una funzione specifica
   const executeFunction = async (functionName, funcArgs) => {
     try {
       const res = await axios.post("/api/openai/backend-simulate", {
@@ -236,193 +294,86 @@ const ChatWithGP = () => {
     }
   };
 
-  const getPlaceholderVideo = () => {
-    if (selectedImage === imageOptions[1].url) {
-      // donna
-      return "/placeholder/donnaplaceholder.mp4";
-    }
-    // uomo
-    return "/placeholder/uomoplaceholder.mp4";
+  // Funzione helper per determinare la sorgente del video:
+  // se c'è audio usiamo "parla.mp4", altrimenti il placeholder in base all'immagine
+  const getVideoSource = () => {
+    return audioUrl
+      ? "/parla.mp4"
+      : selectedImage === "https://www.abeaform.it/wp-content/uploads/2018/11/Abea-Form-Corso-Hotel-Receptionist.jpg"
+      ? "/placeholder/uomoplaceholder.mp4"
+      : "/placeholder/donnaplaceholder.mp4";
   };
-  
-  
-  // Recupero dei messaggi della conversazione
+
   const fetchMessages = async () => {
     try {
       const { data } = await axios.get(`/api/openai/messages/${threadId}`);
-      // Aggiunge solo i nuovi messaggi dell'assistente
-      const newMessages = data.data.filter(
-        (msg) => msg.role === "assistant" && !messages.find((m) => m.id === msg.id)
-      );
+      // Get all messages and update state only if there are new messages
+      const newMessages = data.data.filter((msg) => {
+        return (
+          msg.role === "assistant" &&
+          !messages.some(
+            (m) =>
+              m.id === msg.id ||
+              (m.role === "assistant" &&
+               m.content[0]?.text?.value === msg.content[0]?.text?.value)
+          )
+        );
+      });
+      
+      
+            
       if (newMessages.length > 0) {
-        setMessages((prev) => [...prev, ...newMessages]);
-        // Usa l'ultimo messaggio per generare il video
-        const lastMsg =
-          newMessages[newMessages.length - 1].content[0].text.value;
-        generateAvatarVideo(lastMsg);
+        setMessages(prev => [...prev, ...newMessages]);
+        // Only generate speech for the latest assistant message
+        const latestAssistantMessage = newMessages
+          .filter(msg => msg.role === "assistant")
+          .pop();
+        
+        if (latestAssistantMessage) {
+          const msgText = latestAssistantMessage.content[0].text.value;
+          generateAvatarSpeech(msgText);
+        }
       }
     } catch (error) {
       console.error("Errore nel recupero dei messaggi:", error);
     }
   };
 
-  /*  
-    Funzione helper per dividere il testo in due tranche.
-    Se il testo supera una certa lunghezza, lo dividiamo in modo che la prima parte sia più consistente
-    (circa il 70% del testo) e la seconda il resto.
-  */
-  const splitTextIntoTranches = (text, minLength = 80) => {
-    if (text.length <= minLength) return [text];
-    const target = Math.floor(text.length * 0.3);
-    let splitIndex = text.lastIndexOf(".", target);
-    if (splitIndex === -1) splitIndex = text.lastIndexOf(";", target);
-    if (splitIndex === -1) splitIndex = text.lastIndexOf(",", target);
-    if (splitIndex === -1) splitIndex = text.lastIndexOf(" ", target);
-    if (splitIndex === -1) splitIndex = target;
-    const firstTranche = text.substring(0, splitIndex + 1).trim();
-    const secondTranche = text.substring(splitIndex + 1).trim();
-    return [firstTranche, secondTranche];
-  };
-
-  /*  
-    generateAvatarVideo:
-      - Separa il testo in due tranche se necessario.
-      - Invia entrambe le richieste in parallelo.
-      - Appena la richiesta della prima tranche (la parte più consistente) è pronta, aggiorna l'interfaccia.
-      - L'evento "onEnded" del video controllerà il passaggio al video della seconda tranche, se disponibile.
-  */
-  const generateAvatarVideo = async (inputText) => {
-    setIsVideoGenerating(true);
-
+  const generateAvatarSpeech = async (inputText) => {
     setLoading(true);
-    setErrorMessage(null);
-    setVideoUrl(null);
-    setSecondVideoUrl(null);
-    setFirstVideoEnded(false);
-
-    const tranches = splitTextIntoTranches(inputText, 80);
-
-    if (tranches.length === 1) {
-      // Caso testo breve: richiesta singola
-      try {
-        const res = await axios.post(
-          "/api/openai/create-avatar-video",
-          {
-            sourceUrl: selectedImage,
-            inputText: tranches[0],
-            voiceId: selectedVoice,
-            language: "it",
-            webhookUrl: null,
-          },
-          { headers: { "Content-Type": "application/json" } }
-        );
-        const videoId = res.data.videoId;
-        if (!videoId) throw new Error("ID del video non ricevuto.");
-        const url = await pollForVideoUrl(videoId);
-        setVideoUrl(url);
-        setLoading(false);
-      } catch (error) {
-        console.error(
-          "Errore nella generazione del video:",
-          error.response?.data || error.message
-        );
-        setErrorMessage("Errore nella generazione del video.");
-        setLoading(false);
-      }
-    } else {
-      // Caso testo lungo: inviamo entrambe le richieste in parallelo.
-      const firstPromise = axios
-        .post(
-          "/api/openai/create-avatar-video",
-          {
-            sourceUrl: selectedImage,
-            inputText: tranches[0],
-            voiceId: selectedVoice,
-            language: "it",
-            webhookUrl: null,
-          },
-          { headers: { "Content-Type": "application/json" } }
-        )
-        .then(async (res) => {
-          const videoId = res.data.videoId;
-          if (!videoId)
-            throw new Error("ID del video non ricevuto (prima tranche).");
-          return await pollForVideoUrl(videoId);
-        });
-
-      const secondPromise = axios
-        .post(
-          "/api/openai/create-avatar-video",
-          {
-            sourceUrl: selectedImage,
-            inputText: tranches[1],
-            voiceId: selectedVoice,
-            language: "it",
-            webhookUrl: null,
-          },
-          { headers: { "Content-Type": "application/json" } }
-        )
-        .then(async (res) => {
-          const videoId = res.data.videoId;
-          if (!videoId)
-            throw new Error("ID del video non ricevuto (seconda tranche).");
-          return await pollForVideoUrl(videoId);
-        });
-
-      // Avviaamo entrambe le richieste in parallelo.
-      firstPromise
-        .then((url) => {
-          // Appena il video della prima tranche è pronto, lo mostriamo.
-          setVideoUrl(url);
-        })
-        .catch((err) => {
-          console.error("Errore nella prima tranche:", err);
-          setErrorMessage("Errore nella generazione del video (prima tranche).");
-        });
-
-      secondPromise
-        .then((url) => {
-          // Salviamo l'URL della seconda tranche.
-          setSecondVideoUrl(url);
-        })
-        .catch((err) => {
-          console.error("Errore nella seconda tranche:", err);
-          setErrorMessage("Errore nella generazione del video (seconda tranche).");
-        })
-        .finally(() => {
-          // Quando entrambe le richieste sono concluse, disattiviamo il loading.
-          setLoading(false);
-        });
-    }
-  };
-
-  // Funzione per il polling: attende e restituisce l'URL del video una volta disponibile
-  const pollForVideoUrl = async (videoId) => {
-    for (let i = 0; i < 120; i++) {
-      try {
-        await new Promise((res) => setTimeout(res, 500));
-        const res = await axios.get(`/api/openai/create-avatar-video/${videoId}`);
-        if (res.data.videoUrl) {
-          return res.data.videoUrl;
+    try {
+      const res = await axios.post(
+        "/api/openai/sendtoevenlab",
+        {
+          text: inputText,
+          voiceStyle: "Professionale",
+          behaviorMode: "Interattivo",
+          selectedVoice,
+        },
+        { headers: { "Content-Type": "application/json" } }
+      );
+      if (res.data.audio) {
+        const audioBase64 = res.data.audio;
+        const byteCharacters = atob(audioBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
-      } catch (error) {
-        console.error("Errore nel polling del video:", error);
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: "audio/mpeg" });
+        const url = URL.createObjectURL(blob);
+        setAudioUrl(url);
+      } else {
+        console.error("Audio non ricevuto dalla risposta di ElevenLabs.");
+        setErrorMessage("Errore nella generazione dell'audio.");
       }
+    } catch (error) {
+      console.error("Errore durante la chiamata a sendtoevenlab:", error);
+      setErrorMessage("Errore nella generazione dell'audio.");
     }
-    throw new Error("Il video non è pronto dopo diversi tentativi.");
+    setLoading(false);
   };
 
-  // Handler per l'evento "onEnded" del video:
-  // Quando il primo video finisce, se il video della seconda tranche è disponibile, lo visualizziamo.
-  const handleVideoEnded = () => {
-    setFirstVideoEnded(true);
-    if (secondVideoUrl) {
-      setVideoUrl(secondVideoUrl);
-      setSecondVideoUrl(null);
-    }
-  };
-
-  // Gestione dell'invio tramite input testuale
   const handleInputSubmit = (e) => {
     e.preventDefault();
     if (userInput.trim()) {
@@ -431,47 +382,42 @@ const ChatWithGP = () => {
     }
   };
 
+  // Effetto per sincronizzare l'avvio di audio e video quando audioUrl cambia
+  useEffect(() => {
+    if (audioUrl && audioRef.current && videoRef.current) {
+      audioRef.current.play();
+      videoRef.current.currentTime = 0;
+      videoRef.current.play();
+    }
+  }, [audioUrl]);
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-gray-800">
-    {/* Mobile Header */}
-    <header className="lg:hidden flex items-center justify-between px-6 py-4 bg-gray-800/80 backdrop-blur-sm">
-      <button 
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="rounded-full p-2 hover:bg-gray-700/50 transition-colors"
-      >
-        <svg className="w-6 h-6 text-gray-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
-      </button>
-      <h1 className="text-xl font-semibold text-gray-100">Virtual Assistant</h1>
-      <div className="w-6" />
-    </header>
-
-    <div className="flex flex-1 overflow-hidden">
       {/* Sidebar */}
-      <aside className={`
-        fixed lg:relative lg:flex
-        inset-y-0 left-0 z-50
-        w-72 bg-gray-800/95 backdrop-blur-lg
-        transform lg:transform-none transition-all duration-300 ease-in-out
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
+      <aside
+        className={`
+          fixed lg:relative lg:flex
+          inset-y-0 left-0 z-50
+          w-72 bg-gray-800/95 backdrop-blur-lg
+          transform lg:transform-none transition-all duration-300 ease-in-out
+          ${isSidebarOpen ? "translate-x-0" : "-translate-x-full"}
+        `}
+      >
         <div className="flex flex-col h-full p-6">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
               Settings
             </h2>
-            <button 
+            <button
               onClick={() => setIsSidebarOpen(false)}
-              className="lg:hidden rounded-full p-2 hover:bg-gray-700/50 text-gray-400 hover:text-white transition-colors"
+              className="lg:hidden rounded-full p-2 hover:bg-gray-700/50 transition-colors"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-
-          {/* Avatar Selection */}
+          {/* Avatar e Voice Selection */}
           <div className="mb-8">
             <h3 className="text-sm font-medium text-gray-400 mb-4">Choose Avatar</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -479,28 +425,19 @@ const ChatWithGP = () => {
                 <button
                   key={option.id}
                   onClick={() => setSelectedImage(option.url)}
-                  className={`group relative rounded-xl overflow-hidden transition-all duration-300
-                    ${selectedImage === option.url 
-                      ? 'ring-2 ring-blue-500 scale-105' 
-                      : 'hover:scale-105'}
-                  `}
+                  className={`group relative rounded-xl overflow-hidden transition-all duration-300 ${
+                    selectedImage === option.url ? "ring-2 ring-blue-500 scale-105" : "hover:scale-105"
+                  }`}
                 >
-                  <img
-                    src={option.url}
-                    alt={option.label}
-                    className="w-full h-28 object-cover"
-                  />
+                  <TokenUsageDisplay></TokenUsageDisplay>
+                  <img src={option.url} alt={option.label} className="w-full h-28 object-cover" />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="absolute bottom-2 left-2 text-sm text-white font-medium">
-                      {option.label}
-                    </span>
+                    <span className="absolute bottom-2 left-2 text-sm text-white font-medium">{option.label}</span>
                   </div>
                 </button>
               ))}
             </div>
           </div>
-
-          {/* Voice Selection */}
           <div className="mb-8">
             <h3 className="text-sm font-medium text-gray-400 mb-4">Choose Voice</h3>
             <div className="space-y-3">
@@ -508,20 +445,20 @@ const ChatWithGP = () => {
                 <button
                   key={option.id}
                   onClick={() => setSelectedVoice(option.value)}
-                  className={`w-full px-4 py-3 rounded-xl text-left transition-all duration-300
-                    ${selectedVoice === option.value 
-                      ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white' 
-                      : 'bg-gray-700/50 text-gray-300 hover:bg-gray-700'}
-                  `}
+                  className={`w-full px-4 py-3 rounded-xl text-left transition-all duration-300 ${
+                    selectedVoice === option.value
+                      ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+                      : "bg-gray-700/50 text-gray-300 hover:bg-gray-700"
+                  }`}
                 >
                   {option.label}
                 </button>
               ))}
+              
             </div>
           </div>
-
           <button
-            onClick={createNewThread}
+            onClick={handleNewConversation}
             className="mt-auto w-full py-3 px-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:opacity-90 transition-opacity"
           >
             New Conversation
@@ -529,110 +466,137 @@ const ChatWithGP = () => {
         </div>
       </aside>
 
+      {/* Mobile Header */}
+      <header className="lg:hidden flex items-center justify-between px-6 py-4 bg-gray-800/80 backdrop-blur-sm">
+        <button
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="rounded-full p-2 hover:bg-gray-700/50 transition-colors"
+        >
+          <svg className="w-6 h-6 text-gray-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <h1 className="text-xl font-semibold text-gray-100">Virtual Assistant</h1>
+        <div className="w-6" />
+      </header>
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col max-h-screen overflow-hidden">
         {/* Video Container */}
         <div className="relative w-full h-[45vh] lg:h-[65vh] bg-black/90 rounded-b-3xl overflow-hidden">
-        {videoUrl ? (
-  <video
-    className="w-full h-full object-cover"
-    src={videoUrl}
-    autoPlay
-    controls={false}
-    onEnded={handleVideoEnded}
-  />
-) : (
-  <video
-  className="w-full h-full object-cover"
-  src={getPlaceholderVideo()}
-  autoPlay
-  muted
-  loop
-  
-  controls={false}
-/>
-)}
-
-  {loading && (
-    <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      {/* Loading spinner o quello che preferisci */}
-      <div className="relative">
-        <div className="w-12 h-12 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-gray-200 border-t-purple-500 rounded-full animate-spin"></div>
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            src={getVideoSource()}
+            loop={!audioUrl}
+            autoPlay
+            muted
+            controls={false}
+          />
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+              <div className="relative">
+                <div className="w-12 h-12 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-8 h-8 border-2 border-gray-200 border-t-purple-500 rounded-full animate-spin"></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
-  )}
-</div>
 
+        {/* Audio Element */}
+        {audioUrl && (
+          <audio
+            ref={audioRef}
+            src={audioUrl}
+            autoPlay
+            onEnded={() => {
+              setAudioUrl(null);
+              videoRef.current && videoRef.current.pause();
+            }}
+            onPause={() => {
+              videoRef.current && videoRef.current.pause();
+            }}
+            onPlay={() => {
+              videoRef.current && videoRef.current.play();
+            }}
+          >
+            Il tuo browser non supporta l'elemento audio.
+          </audio>
+        )}
 
-        {/* Chat Container */}
+        {/* Chat Container e Input */}
         <div className="flex-1 flex flex-col bg-gray-800/50 backdrop-blur-md">
-        <div 
-  ref={chatContainerRef}
-  className="
-    flex-1
-    px-4 lg:px-6 py-4
-    space-y-4
-    overflow-y-auto
-    max-h-[400px]           /* Limita l'altezza massima */
-    scrollbar-thin          /* Se hai il plugin scrollbar di Tailwind */
-    scrollbar-track-gray-800
-    scrollbar-thumb-gray-500
-  "
->
-  {messages.map((msg) => (
-    <div
-      key={msg.id}
-      className={`flex ${msg.role === 'assistant' ? 'justify-start' : 'justify-end'}`}
-    >
-      <div 
-        className={`max-w-[85%] lg:max-w-[70%] rounded-2xl px-5 py-3 
-          ${msg.role === 'assistant' 
-            ? 'bg-gray-700/70 text-white rounded-tr-2xl rounded-tl-none' 
-            : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-tl-2xl rounded-tr-none'
-          }
-        `}
-      >
-        {msg.content[0]?.text?.value}
-      </div>
-    </div>
-  ))}
-  {isTyping && (
-    <div className="flex justify-start">
-      <div className="bg-gray-700/70 text-white rounded-2xl px-4 py-2">
-        <span className="animate-pulse">...</span>
-      </div>
-    </div>
-  )}
-</div>
+          <div
+            ref={chatContainerRef}
+            className="flex-1 px-4 lg:px-6 py-4 space-y-4 overflow-y-auto max-h-[400px] scrollbar-thin scrollbar-track-gray-800 scrollbar-thumb-gray-500"
+          >
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}
+              >
+                <div
+                  className={`max-w-[85%] lg:max-w-[70%] rounded-2xl px-5 py-3 ${
+                    msg.role === "assistant"
+                      ? "bg-gray-700/70 text-white rounded-tr-2xl rounded-tl-none"
+                      : "bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-tl-2xl rounded-tr-none"
+                  }`}
+                >
+                  {msg.content[0]?.text?.value}
+                </div>
+              </div>
+            ))}
+            {isTyping && (
+              <div className="flex justify-start">
+                <div className="bg-gray-700/70 text-white rounded-2xl px-4 py-2">
+                  <span className="animate-pulse">...</span>
+                </div>
+              </div>
+            )}
+          </div>
 
-
-          {/* Input Area */}
-          <div className="p-2 lg:p-6 border-t border-gray-700/50 ">
-            <form 
-              onSubmit={handleInputSubmit}
-              className="flex items-center gap-1"
-            >
+          <div className="p-2 lg:p-6 border-t border-gray-700/50">
+            {/* Cancel Button */}
+            {loading && runId && (
+              <div className="mb-4 flex justify-center">
+                <button
+                  onClick={async () => {
+                    try {
+                      await axios.post(`/api/openai/threads/${threadId}/runs/${runId}/cancel`);
+                      setLoading(false);
+                      setErrorMessage("Response cancelled");
+                    } catch (error) {
+                      console.error("Error cancelling response:", error);
+                    }
+                  }}
+                  className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
+                >
+                  Cancel Response
+                </button>
+              </div>
+            )}
+            <form onSubmit={handleInputSubmit} className="flex items-center gap-1">
               <button
                 type="button"
                 onClick={toggleListening}
                 disabled={loading}
-                className={`p-3 rounded-xl transition-all duration-300
-                  ${isListening 
-                    ? 'bg-red-500 hover:bg-red-600' 
-                    : 'bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90'}
-                  ${loading ? 'opacity-50 cursor-not-allowed' : ''}
-                `}
+                className={`p-3 rounded-xl transition-all duration-300 ${
+                  isListening
+                    ? "bg-red-500 hover:bg-red-600"
+                    : "bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90"
+                } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
                     d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
                   />
                 </svg>
               </button>
-
               <input
                 type="text"
                 value={userInput}
@@ -641,15 +605,14 @@ const ChatWithGP = () => {
                 placeholder={loading ? "Assistant is thinking..." : "Type your message..."}
                 className="flex-1 px-5 py-3 bg-gray-700/50 text-white rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               />
-              
               <button
                 type="submit"
                 disabled={loading || !userInput.trim()}
-                className={`px-3 py-3 rounded-xl font-small transition-all duration-300
-                  ${loading || !userInput.trim()
-                    ? 'bg-gray-700/50 text-gray-400 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90'}
-                `}
+                className={`px-3 py-3 rounded-xl font-small transition-all duration-300 ${
+                  loading || !userInput.trim()
+                    ? "bg-gray-700/50 text-gray-400 cursor-not-allowed"
+                    : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90"
+                }`}
               >
                 Send
               </button>
@@ -657,54 +620,9 @@ const ChatWithGP = () => {
           </div>
         </div>
       </main>
+      {/* Modal ed Error Toast (eventuale) */}
     </div>
-
-    {/* Modal */}
-    {showModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl p-6 max-w-sm w-full">
-          <h3 className="text-xl font-semibold text-gray-900">
-            Booking Confirmed
-          </h3>
-          <p className="mt-2 text-gray-600">
-            Your booking has been successfully confirmed!
-          </p>
-          <div className="mt-6 flex justify-end gap-3">
-            <button
-              onClick={() => setShowModal(false)}
-              className="px-4 py-2 rounded-xl text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              Close
-            </button>
-            <a
-              href={pdfLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90 transition-opacity"
-            >
-              Download PDF
-            </a>
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* Error Toast */}
-    {errorMessage && (
-  <div className="fixed bottom-4 right-4 px-6 py-3 rounded-xl bg-red-500 text-white shadow-lg animate-fade-in flex items-center gap-4">
-    <span>{errorMessage}</span>
-    <button
-      onClick={() => setErrorMessage(null)}
-      className="focus:outline-none hover:text-gray-200 transition-colors"
-    >
-      ✕
-    </button>
-  </div>
-)}
-
-  </div>
   );
-  
 };
 
 export default ChatWithGP;

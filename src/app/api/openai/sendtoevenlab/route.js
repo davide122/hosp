@@ -4,9 +4,9 @@ export async function POST(request) {
   const apiKey = process.env.ELEVENLABS_KEY;
   const { text, voiceStyle, behaviorMode, selectedVoice } = await request.json();
   const voices = [
-    { id: "Kq9pDHHIMmJsG9PEqOtv", name: "Voce 1" },
-    { id: "PSp7S6ST9fDNXDwEzX0m", name: "Voce 2" },
-    { id: "13Cuh3NuYvWOVQtLbRN8", name: "Voce 3" },
+    { id: "2zRM7PkgwBPiau2jvVXc", name: "Voce 1" },
+    { id: "2zRM7PkgwBPiau2jvVXc", name: "Voce 2" },
+    { id: "2zRM7PkgwBPiau2jvVXc", name: "Voce 3" },
   ];
 
 
@@ -18,8 +18,8 @@ export async function POST(request) {
   }
 
   const voiceSettings = {
-    stability: voiceStyle === "Professionale" ? 0.7 : voiceStyle === "Amichevole" ? 0.5 : 0.3,
-    similarity_boost: behaviorMode === "Interattivo" ? 0.4 : 0.2,
+    stability: voiceStyle === "Professionale" ? 0.1 : voiceStyle === "Amichevole" ? 0.1 : 0.1,
+    similarity_boost: behaviorMode === "Interattivo" ? 0.5 : 0.5,
     latency_optimization: 4,
   };
 
@@ -35,7 +35,7 @@ export async function POST(request) {
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_multilingual_v2",
+        model_id: "eleven_flash_v2_5",
         voice_settings: voiceSettings,
       }),
     });

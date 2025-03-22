@@ -7,14 +7,14 @@ const AudioGenerator = () => {
   const [text, setText] = useState("");
   const [audioSrc, setAudioSrc] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState("EXAVITQu4vr4xnSDxMaL");
+  const [selectedVoice, setSelectedVoice] = useState("2zRM7PkgwBPiau2jvVXc");
   const waveSurferRef = useRef(null);
   const waveContainerRef = useRef(null);
 
   const voices = [
-    { id: "Kq9pDHHIMmJsG9PEqOtv", name: "Sandra" },
-    { id: "PSp7S6ST9fDNXDwEzX0m", name: "Marco" },
-    { id: "13Cuh3NuYvWOVQtLbRN8", name: "Giovanni" },
+    { id: "2zRM7PkgwBPiau2jvVXc", name: "Sandra" },
+    { id: "2zRM7PkgwBPiau2jvVXc", name: "Marco" },
+    { id: "2zRM7PkgwBPiau2jvVXc", name: "Giovanni" },
   ];
 
 

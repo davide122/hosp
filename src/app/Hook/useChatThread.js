@@ -70,7 +70,7 @@ export default function useChatThread() {
         await axios.post(`/api/openai/messages/${threadId}`, { content: message });
         // Avvia un nuovo run di conversazione
         const runRes = await axios.post(`/api/openai/runs/${threadId}`, {
-          assistantId: "asst_s1KQTKTvDmhHlxQ4q3MTeuAs",
+          assistantId: "asst_vtilXHOL59QkANctpsUjpO7b",
         });
         await pollConversation(runRes.data.id);
       } catch (error) {

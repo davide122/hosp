@@ -1,20 +1,28 @@
 "use client";
 import ChatWithGP from "../component/ChatWithGP";
+import { TokenUsageDisplay } from "../components/TokenUsageDisplay";
+import { useState } from "react";
 
 const Bot = () => {
+  const [tokenUsage, setTokenUsage] = useState(null);
+
+  const handleTokenUsageUpdate = (usage) => {
+    setTokenUsage(usage);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-    <div className="max-w-[1920px] mx-auto  lg:p-8">
-      <div className="grid lg:grid-cols-[1fr_auto] gap-8">
+    <div className="max-w-[1920px] mx-auto p-4 lg:p-8">
+      <div className="grid lg:grid-cols-[1fr_auto] md:grid-cols-1 gap-4 lg:gap-8">
         {/* Main Chat Component */}
-        <div className=" overflow-hidden bg-gray-800/30 backdrop-blur-xl border border-gray-700/30 shadow-2xl">
-          <ChatWithGP />
+        <div className="overflow-hidden bg-gray-800/30 backdrop-blur-xl border border-gray-700/30 shadow-2xl rounded-3xl">
+          <ChatWithGP onTokenUsageUpdate={handleTokenUsageUpdate} />
         </div>
 
         {/* Info Panel - Optional */}
-        <div className="hidden lg:flex flex-col gap-6 w-80">
+        <div className="flex flex-col gap-4 lg:gap-6 w-full lg:w-80 sticky top-4">
           {/* Status Card */}
-          <div className="p-6 rounded-3xl bg-gray-800/30 backdrop-blur-xl border border-gray-700/30">
+          <div className="p-4 lg:p-6 rounded-3xl bg-gray-800/30 backdrop-blur-xl border border-gray-700/30 shadow-lg hover:shadow-xl transition-shadow">
             <h2 className="text-xl font-semibold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent mb-4">
               Virtual Assistant
             </h2>
@@ -29,8 +37,11 @@ const Bot = () => {
             </div>
           </div>
 
+          {/* Token Usage Display */}
+          <TokenUsageDisplay tokenUsage={tokenUsage} />
+
           {/* Features Card */}
-          <div className="p-6 rounded-3xl bg-gray-800/30 backdrop-blur-xl border border-gray-700/30">
+          <div className="p-4 lg:p-6 rounded-3xl bg-gray-800/30 backdrop-blur-xl border border-gray-700/30 shadow-lg hover:shadow-xl transition-shadow">
             <h3 className="text-lg font-semibold text-gray-200 mb-4">
               Features
             </h3>
