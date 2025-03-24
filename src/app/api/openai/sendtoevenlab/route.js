@@ -18,7 +18,7 @@ export async function POST(request) {
   }
 
   const voiceSettings = {
-    stability: voiceStyle === "Professionale" ? 0.1 : voiceStyle === "Amichevole" ? 0.1 : 0.1,
+    stability: voiceStyle === "Professionale" ? 0.5 : voiceStyle === "Amichevole" ? 0.5 : 0.5,
     similarity_boost: behaviorMode === "Interattivo" ? 0.5 : 0.5,
     latency_optimization: 4,
   };

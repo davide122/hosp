@@ -1,90 +1,79 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { neon } from '@neondatabase/serverless';
 import { NextResponse } from 'next/server';
+
+const sql = neon(process.env.DATABASE_URL);
 
 export async function POST(req) {
   try {
-    const { name, reservationNumber, reservationDate, roomDetails } = await req.json();
-
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([600, 400]);
+    const body = await req.json();
+    console.log("Body completo ricevuto dal backend:", JSON.stringify(body));
     
-    const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
-
-    // Sfondo per la carta di prenotazione
-    page.drawRectangle({
-      x: 0,
-      y: 0,
-      width: 600,
-      height: 400,
-      color: rgb(0.9, 0.9, 0.9),
-    });
-
-    // Titolo
-    page.drawText("Conferma Prenotazione", {
-      x: 50,
-      y: 350,
-      size: 24,
-      font: timesRomanFont,
-      color: rgb(0.2, 0.4, 0.6),
-    });
-
-    // Informazioni sul cliente
-    page.drawText(`Nome Cliente: ${name}`, {
-      x: 50,
-      y: 300,
-      size: 18,
-      font: timesRomanFont,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-
-    // Numero di prenotazione
-    page.drawText(`Numero Prenotazione: ${reservationNumber}`, {
-      x: 50,
-      y: 270,
-      size: 18,
-      font: timesRomanFont,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-
-    // Data di prenotazione
-    page.drawText(`Data Prenotazione: ${reservationDate}`, {
-      x: 50,
-      y: 240,
-      size: 18,
-      font: timesRomanFont,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-
-    // Dettagli della stanza
-    page.drawText(`Dettagli Stanza: ${roomDetails}`, {
-      x: 50,
-      y: 210,
-      size: 18,
-      font: timesRomanFont,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-
-    // Footer con messaggio finale
-    page.drawText("Grazie per aver prenotato con noi!", {
-      x: 50,
-      y: 50,
-      size: 16,
-      font: timesRomanFont,
-      color: rgb(0.2, 0.4, 0.6),
-    });
-
-    const pdfBytes = await pdfDoc.save();
-    const pdfBase64 = Buffer.from(pdfBytes).toString('base64');
-    const pdfDataUrl = `data:application/pdf;base64,${pdfBase64}`;
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        pdfLink: pdfDataUrl,
-      },
-    });
+    const { functionName } = body;
+    // Estrai la query in modo più flessibile
+    let query = body.query;
+    
+    // Se la query non esiste ma ci sono caratteri numerici come chiavi
+    if (!query && Object.keys(body).some(key => !isNaN(parseInt(key)))) {
+      // Ricostruiamo la stringa originale
+      const chars = [];
+      for (let i = 0; i < Object.keys(body).length; i++) {
+        if (body[i] !== undefined) {
+          chars.push(body[i]);
+        }
+      }
+      
+      // Tentiamo di parsare la stringa ricostruita
+      const reconstructedString = chars.join('');
+      console.log("Stringa ricostruita:", reconstructedString);
+      
+      try {
+        const parsed = JSON.parse(reconstructedString);
+        query = parsed.query;
+        console.log("Query estratta dalla stringa ricostruita:", query);
+      } catch (e) {
+        console.error("Errore nel parsing della stringa ricostruita:", e);
+      }
+    }
+    
+    if (functionName === 'open_activity_card') {
+      if (!query) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Query mancante o non valida'
+        }, { status: 400 });
+      }
+      
+      console.log("Cercando attività con query:", query);
+      
+      const [activity] = await sql`
+        SELECT a.*,
+                json_agg(ai.image_url) AS images
+        FROM activities a
+        LEFT JOIN activity_images ai ON a.id = ai.activity_id
+        WHERE a.name ILIKE ${'%' + query + '%'}
+        GROUP BY a.id
+      `;
+      
+      if (!activity) {
+        return NextResponse.json({ 
+          success: false, 
+          error: 'Attività non trovata' 
+        }, { status: 404 });
+      }
+      
+      return NextResponse.json({ success: true, data: activity });
+    }
+    
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Funzione non supportata' 
+    }, { status: 400 });
   } catch (error) {
-    console.error("Errore durante la generazione del PDF:", error);
-    return NextResponse.json({ success: false, error: "Errore durante la generazione del PDF" }, { status: 500 });
+    console.error('Errore nel backend:', error);
+    return NextResponse.json({ 
+      success: false, 
+      error: 'Errore nel backend', 
+      details: error.message 
+    }, { status: 500 });
   }
 }

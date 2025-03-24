@@ -3,14 +3,14 @@ import { NextResponse } from 'next/server';
 import axios from 'axios';
 
 const openAIKey = process.env.OPENAI_KEY;
-const TIMEOUT = 2000; // Timeout ridotto per velocizzare (3 secondi)
+const TIMEOUT = 4000; // Timeout ridotto per velocizzare (3 secondi)
 
 async function startRun(threadId, assistantId) {
   const startTime = Date.now();
 
   // Esempio di verifica: avvia la run solo se l'orario corrente è tra le 9:00 e le 18:00
   const currentHour = new Date().getHours();
-  if (currentHour < 9 || currentHour > 18) {
+  if (currentHour < 3 || currentHour > 24) {
     console.warn(`Run non avviata: orario non consentito (${currentHour}h)`);
     return { success: false, error: 'Run non avviata: orario non consentito' };
   }
