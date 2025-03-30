@@ -84,6 +84,8 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       if (res.data && res.data.id) {
         setThreadId(res.data.id);
         sessionStorage.setItem("threadId", res.data.id);
+        // Invia il messaggio di benvenuto
+        handleUserMessage("Ciao, presentati e dimmi cosa puoi fare per me");
       }
     } catch (error) {
       console.error("Errore nella creazione del thread:", error);
@@ -156,10 +158,13 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       return;
     }
 
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now(), role: "user", content: [{ text: { value: message } }] },
-    ]);
+    // Non aggiungiamo il primo messaggio dell'utente ai messaggi visualizzati
+    if (message !== "Ciao, presentati e dimmi cosa puoi fare per me") {
+      setMessages((prev) => [
+        ...prev,
+        { id: Date.now(), role: "user", content: [{ text: { value: message } }] },
+      ]);
+    }
 
     setLoading(true);
     try {
@@ -348,11 +353,13 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
 
   const generateAvatarSpeech = async (inputText) => {
     setLoading(true);
+    const textWithoutUrls = inputText.replace(/(https?:\/\/[^\s]+)/g, '');
+
     try {
       const res = await axios.post(
         "/api/openai/sendtoevenlab",
         {
-          text: inputText,
+          text: textWithoutUrls,
           voiceStyle: "Professionale",
           behaviorMode: "Interattivo",
           selectedVoice,
@@ -418,7 +425,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       const thresholdPause = 5;
       const thresholdResume = 8;
       let silenceStart = null;
-      const checkInterval = 10; // Controlla ogni 50ms
+      const checkInterval = 10; 
   
       const intervalId = setInterval(() => {
         analyser.getByteTimeDomainData(dataArray);
