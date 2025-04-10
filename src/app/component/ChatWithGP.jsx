@@ -25,7 +25,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   // Stato per l'audio generato da ElevenLabs
   const [audioUrl, setAudioUrl] = useState(null);
   // Stato per la lingua
-  const [language, setLanguage] = useState(() => localStorage.getItem("preferredLanguage") || "ita");
+  const [language, setLanguage] = useState("ita");
   
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
