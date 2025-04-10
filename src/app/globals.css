@@ -87,3 +87,30 @@ body {
 .relative > svg {
   z-index: -1;
 }
+
+.z-1000{
+  z-index: 10000000000000000000 !important;
+}
+.barnav{
+  position: sticky;
+  bottom: 0;
+padding: 20px;
+  width: 100%;
+  gap: 5px;
+  padding: 10px;
+
+}
+
+.pb{
+  padding-bottom: 20px;
+}
+
+.posiziona{
+  
+ 
+}
+
+.posizionad{
+height: 300px;
+
+}
