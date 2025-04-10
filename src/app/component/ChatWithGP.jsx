@@ -26,6 +26,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   const [audioUrl, setAudioUrl] = useState(null);
   // Stato per la lingua
   const [language, setLanguage] = useState(() => localStorage.getItem("preferredLanguage") || "ita");
+  
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
   // Riferimenti per riconoscimento vocale, chat e media
@@ -34,6 +35,12 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedLang = localStorage.getItem("preferredLanguage");
+      if (savedLang) setLanguage(savedLang);
+    }
+  }, []);
   // All'avvio recuperiamo (o creiamo) il thread
   useEffect(() => {
     const storedThreadId = sessionStorage.getItem("threadId");
