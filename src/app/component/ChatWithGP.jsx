@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 
@@ -28,6 +30,11 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   const [language, setLanguage] = useState("ita");
   
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
+  
+  // Stati per il player audio
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
   // Riferimenti per riconoscimento vocale, chat e media
   const recognitionRef = useRef(null);
@@ -35,18 +42,41 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
+
+  
+  // Inizializzazione: carica la lingua preferita e gestisce la creazione del thread
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedLang = localStorage.getItem("preferredLanguage");
-      if (savedLang) setLanguage(savedLang);
-    }
+    const initializeChat = async () => {
+      if (typeof window !== "undefined") {
+        // 1. Carica la lingua preferita
+        const savedLang = localStorage.getItem("preferredLanguage");
+        if (savedLang) setLanguage(savedLang);
+        
+        // 2. Gestisci il thread
+        const storedThreadId = sessionStorage.getItem("threadId");
+        if (storedThreadId) {
+          setThreadId(storedThreadId);
+          // Carica i messaggi esistenti
+          try {
+            const { data } = await axios.get(`/api/openai/messages/${storedThreadId}`);
+            if (data && data.data) {
+              setMessages(data.data);
+            }
+          } catch (error) {
+            console.error("Errore nel recupero dei messaggi:", error);
+            // Se c'è un errore nel recupero dei messaggi, creiamo un nuovo thread
+            createNewThread();
+          }
+        } else {
+          // Se non c'è un thread esistente, ne creiamo uno nuovo
+          createNewThread();
+        }
+      }
+    };
+    
+    initializeChat();
   }, []);
-  // All'avvio recuperiamo (o creiamo) il thread
-  useEffect(() => {
-    const storedThreadId = sessionStorage.getItem("threadId");
-    if (storedThreadId) setThreadId(storedThreadId);
-    else createNewThread();
-  }, []);
+  
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -71,8 +101,12 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       if (res.data && res.data.id) {
         setThreadId(res.data.id);
         sessionStorage.setItem("threadId", res.data.id);
-        // Messaggio di benvenuto che evidenzia la lingua preferita
-        handleUserMessage(`Ciao, mostra messaggio benvenuto! La lingua preferita dell'utente è: ${language}`);
+        
+        // Attendiamo un momento per assicurarci che il thread sia stato creato correttamente
+        setTimeout(() => {
+          // Messaggio di benvenuto che evidenzia la lingua preferita
+          handleUserMessage(`Ciao, mostra messaggio benvenuto! La lingua preferita dell'utente è: ${language}`);
+        }, 500);
       }
     } catch (error) {
       console.error("Errore nella creazione del thread:", error);
@@ -131,9 +165,12 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   };
 
   const handleUserMessage = async (message) => {
-    if (!threadId) return console.error("Thread ID non disponibile.");
+    if (!threadId) {
+      console.error("Thread ID non disponibile.");
+      return;
+    }
     if (!message || message.trim() === "") return;
-    if (message !== "Ciao, presentati e dimmi cosa puoi fare per me") {
+    if (message !== "Ciao, mostra messaggio benvenuto! La lingua preferita dell'utente è: " + language) {
       setMessages((prev) => [
         ...prev,
         { id: Date.now(), role: "user", content: [{ text: { value: message } }] },
@@ -334,8 +371,72 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       audioRef.current.play();
       videoRef.current.currentTime = 0;
       videoRef.current.play();
+      setIsAudioPlaying(true);
     }
   }, [audioUrl]);
+
+  // Gestione degli eventi audio per aggiornare il player
+  useEffect(() => {
+    if (audioRef.current) {
+      const handleTimeUpdate = () => {
+        setAudioCurrentTime(audioRef.current.currentTime);
+      };
+
+      const handleLoadedMetadata = () => {
+        setAudioDuration(audioRef.current.duration);
+      };
+
+      const handlePlay = () => {
+        setIsAudioPlaying(true);
+      };
+
+      const handlePause = () => {
+        setIsAudioPlaying(false);
+      };
+
+      audioRef.current.addEventListener('timeupdate', handleTimeUpdate);
+      audioRef.current.addEventListener('loadedmetadata', handleLoadedMetadata);
+      audioRef.current.addEventListener('play', handlePlay);
+      audioRef.current.addEventListener('pause', handlePause);
+
+      return () => {
+        if (audioRef.current) {
+          audioRef.current.removeEventListener('timeupdate', handleTimeUpdate);
+          audioRef.current.removeEventListener('loadedmetadata', handleLoadedMetadata);
+          audioRef.current.removeEventListener('play', handlePlay);
+          audioRef.current.removeEventListener('pause', handlePause);
+        }
+      };
+    }
+  }, [audioRef.current]);
+
+  // Funzione per formattare il tempo in mm:ss
+  const formatTime = (time) => {
+    if (isNaN(time)) return "00:00";
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Funzione per gestire il cambio della posizione nella barra di avanzamento
+  const handleSeek = (e) => {
+    if (audioRef.current) {
+      const newTime = (e.target.value / 100) * audioDuration;
+      audioRef.current.currentTime = newTime;
+      setAudioCurrentTime(newTime);
+    }
+  };
+
+  // Funzione per mettere in pausa/riprodurre l'audio
+  const toggleAudioPlayback = () => {
+    if (audioRef.current) {
+      if (isAudioPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+    }
+  };
 
   useEffect(() => {
     if (audioUrl && audioRef.current && videoRef.current) {
@@ -385,6 +486,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
     }
   }, [audioUrl]);
 
+  
   const highlightKeywords = (text, onClickHandler) => {
     if (!text) return null;
     const keywords = [
@@ -425,7 +527,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-gray-800 relative">
+    <div className="flex flex-col h-screen md:h-full bg-gradient-to-b from-gray-900 to-gray-800 relative">
       {/* Header con dropdown per la lingua */}
        
    
@@ -466,7 +568,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
 
       {/* Contenuto principale */}
       <main className="flex-1 flex flex-col max-h-50 overflow-hidden">
-        <div className="relative bg-black/90  overflow-hidden posizionad">
+        <div className="relative bg-black/90 overflow-hidden posizionad md:h-[30%]">
           <video
             ref={videoRef}
             className="w-full object-cover posiziona "
@@ -488,28 +590,62 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
           )}
         </div>
         {audioUrl && (
-          <audio
-            ref={audioRef}
-            src={audioUrl}
-            autoPlay
-            onEnded={() => {
-              setAudioUrl(null);
-              videoRef.current && videoRef.current.pause();
-            }}
-            onPause={() => {
-              videoRef.current && videoRef.current.pause();
-            }}
-            onPlay={() => {
-              videoRef.current && videoRef.current.play();
-            }}
-          >
-            Il tuo browser non supporta l'elemento audio.
-          </audio>
+          <>
+            <audio
+              ref={audioRef}
+              src={audioUrl}
+              autoPlay
+              onEnded={() => {
+                setAudioUrl(null);
+                videoRef.current && videoRef.current.pause();
+                setAudioCurrentTime(0);
+                setIsAudioPlaying(false);
+              }}
+              onPause={() => {
+                videoRef.current && videoRef.current.pause();
+              }}
+              onPlay={() => {
+                videoRef.current && videoRef.current.play();
+              }}
+            >
+              Il tuo browser non supporta l'elemento audio.
+            </audio>
+            
+            {/* Player audio */}
+            <div className="bg-gray-900 p-3 flex items-center space-x-3">
+              <button 
+                onClick={toggleAudioPlayback}
+                className="text-white bg-blue-600 hover:bg-blue-700 rounded-full p-2 transition-colors"
+              >
+                {isAudioPlaying ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </button>
+              <div className="text-xs text-gray-400 w-16">{formatTime(audioCurrentTime)}</div>
+              <div className="flex-1">
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={(audioCurrentTime / audioDuration) * 100 || 0}
+                  onChange={handleSeek}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                />
+              </div>
+              <div className="text-xs text-gray-400 w-16">{formatTime(audioDuration)}</div>
+            </div>
+          </>
         )}
         <div className="flex-1 flex flex-col bg-gray-800/50 backdrop-blur-md">
           <div
             ref={chatContainerRef}
-            className="flex-1 px-4 lg:px-6 py-4 space-y-4 overflow-y-auto max-h-[330px] scrollbar-thin scrollbar-track-gray-800 scrollbar-thumb-gray-500 pb"
+            className="flex-1 px-4 lg:px-6 py-4 space-y-4 overflow-y-auto max-h-[330px] md:max-h-[calc(50vh-200px)] scrollbar-thin scrollbar-track-gray-800 scrollbar-thumb-gray-500 pb"
           >
             {messages.map((msg) => (
               <div key={msg.id} className={`flex ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}>

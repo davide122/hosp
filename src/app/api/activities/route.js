@@ -22,12 +22,12 @@ export async function POST(req) {
     } = await req.json();
 
     // Inserimento nella tabella activities
-    const { rows } = await sql`
+    const result = await sql`
       INSERT INTO activities (name, email, menu, prices, address, phone_number, website, description, category)
       VALUES (${name}, ${email}, ${menu}, ${prices}, ${address}, ${phone_number}, ${website}, ${description}, ${category})
       RETURNING id
     `;
-    const activityId = rows[0].id;
+    const activityId = result[0].id;
 
     // Se vengono fornite immagini, inseriscile nella tabella activity_images
     if (images && Array.isArray(images)) {

@@ -2,7 +2,12 @@
 import ChatWithGP from "../component/ChatWithGP";
 import { TokenUsageDisplay } from "../components/TokenUsageDisplay";
 import { useState } from "react";
+import dynamic from "next/dynamic";
 
+const NewsletterForm = dynamic(
+  () => import("../component/newsletter/NewsletterForm"),
+  { ssr: false }
+);
 const Bot = () => {
   const [tokenUsage, setTokenUsage] = useState(null);
 
@@ -11,11 +16,12 @@ const Bot = () => {
   };
 
   return (
-    <div className=" bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-    <div className="mx-auto">
-      <div className="">
+    <div className=" bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 min-h-screen md:flex md:items-center md:justify-center">
+      <NewsletterForm></NewsletterForm>
+    <div className="mx-auto md:container md:max-w-3xl md:h-[80vh] md:overflow-hidden">
+      <div className="w-full">
         {/* Main Chat Component */}
-        <div className="overflow-hidden bg-gray-800/30 backdrop-blur-xl border border-gray-700/30 shadow-2xl">
+        <div className="overflow-hidden bg-gray-800/30 backdrop-blur-xl border border-gray-700/30 shadow-2xl md:rounded-xl md:h-[80vh]">
           <ChatWithGP onTokenUsageUpdate={handleTokenUsageUpdate} />
         </div>
 
