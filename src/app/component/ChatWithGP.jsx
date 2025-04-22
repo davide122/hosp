@@ -1,7 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
+import { FiSend, FiMic, FiStopCircle, FiPlusCircle, FiRefreshCw } from "react-icons/fi";
+import dynamic from "next/dynamic";
+
+// Import condizionale del componente di compatibilità per evitare errori SSR
+const BrowserCompatibilityHelper = dynamic(() => import("./BrowserCompatibilityHelper"), {
+  ssr: false
+});
 
 const languageOptions = [
   { code: "ita", label: "Italiano", flag: "🇮🇹" },
@@ -134,25 +141,55 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   };
 
   // Riconoscimento vocale
-  const startListening = () => {
+  const startListening = async () => {
+    // Prima verifica le autorizzazioni del microfono
+    const { requestMicrophonePermission } = await import('../utils/microphonePermissions');
+    const { stream, error } = await requestMicrophonePermission();
+    
+    if (error) {
+      console.error(error);
+      alert(error); // Mostra un messaggio all'utente
+      return;
+    }
+    
+    // Rilascia lo stream del microfono poiché SpeechRecognition lo gestirà internamente
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       console.error("Riconoscimento vocale non supportato.");
+      alert("Il tuo browser non supporta il riconoscimento vocale. Prova con Chrome o Edge.");
       return;
     }
+    
     recognitionRef.current = new SpeechRecognition();
     recognitionRef.current.lang = "it-IT";
-    recognitionRef.current.start();
-    recognitionRef.current.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      handleUserMessage(transcript);
-    };
-    recognitionRef.current.onend = () => setIsListening(false);
-    recognitionRef.current.onerror = (e) => {
-      console.error("Errore nel riconoscimento vocale:", e.error);
+    recognitionRef.current.continuous = false;
+    recognitionRef.current.interimResults = false;
+    recognitionRef.current.maxAlternatives = 1;
+    
+    try {
+      recognitionRef.current.start();
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        handleUserMessage(transcript);
+      };
+      recognitionRef.current.onend = () => setIsListening(false);
+      recognitionRef.current.onerror = (e) => {
+        console.error("Errore nel riconoscimento vocale:", e.error);
+        if (e.error === 'not-allowed' || e.error === 'permission-denied') {
+          alert("Permesso per il microfono negato. Controlla le impostazioni del browser.");
+        }
+        setIsListening(false);
+      };
+      setIsListening(true);
+    } catch (e) {
+      console.error("Errore nell'avvio del riconoscimento vocale:", e);
+      alert("Si è verificato un errore nell'avvio del riconoscimento vocale. Ricarica la pagina e riprova.");
       setIsListening(false);
-    };
-    setIsListening(true);
+    }
   };
 
   const stopListening = () => {

@@ -53,7 +53,7 @@ export async function POST(request) {
       subject: "Conferma la tua Email e attiva il tuo assistente AI 🤖",
       html: `
       <div style="background-color:#0f0f14;padding:40px;font-family:sans-serif;color:white;text-align:center">
-        <img src="https://yourdomain.com/logo-bot.png" alt="BotIA Logo" width="60" height="60" style="margin-bottom:20px;" />
+        <img src="${process.env.NEXT_PUBLIC_BASE_URL}/icon.png" alt="BotIA Logo" width="60" height="60" style="margin-bottom:20px;" />
         <h1 style="font-size:30px;color:#ffffff;margin-bottom:10px;">Verifica il tuo indirizzo email</h1>
         <p style="font-size:16px;color:#c3c3c3;margin-bottom:30px;">
           Benvenuto in <strong style="color:#a78bfa;">BotIA</strong>, il tuo assistente con voce, video e intelligenza.

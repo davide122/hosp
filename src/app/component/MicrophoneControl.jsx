@@ -20,15 +20,40 @@ const MicrophoneControl = ({ onNewThread, onToggleListening, onStopRun, onBlockA
     }
   };
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (isBlocked) {
       console.log("Bloccato: Il microfono non può essere attivato");
       return;
     }
-    isListening ? stopListening() : startListening();
+    isListening ? stopListening() : await startListening();
   };
 
-  const startListening = () => {
+  const startListening = async () => {
+    // Importa e utilizza l'utility per la gestione delle autorizzazioni del microfono
+    const { requestMicrophonePermission, checkMicrophonePermissionStatus } = await import('../utils/microphonePermissions');
+    
+    // Verifica lo stato delle autorizzazioni
+    const permissionStatus = await checkMicrophonePermissionStatus();
+    
+    if (permissionStatus === 'denied') {
+      alert("Permesso per il microfono negato. Controlla le impostazioni del browser.");
+      return;
+    }
+    
+    // Richiedi l'autorizzazione per il microfono
+    const { stream, error } = await requestMicrophonePermission();
+    
+    if (error) {
+      console.error(error);
+      alert(error); // Mostra un messaggio all'utente
+      return;
+    }
+    
+    // Rilascia lo stream poiché sarà gestito dal componente principale
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    
     setIsListening(true);
     if (onToggleListening) onToggleListening(true);
   };

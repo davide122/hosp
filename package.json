@@ -8,8 +8,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "drip": "node src/lib/scheduler.js"
-
+    "drip": "node src/lib/scheduler.mjs",
+    "verify-deploy": "node scripts/verify-deploy.js",
+    "check-env": "node scripts/check-env.js"
   },
   "dependencies": {
     "@d-id/client-sdk": "^1.0.19-beta.137",
