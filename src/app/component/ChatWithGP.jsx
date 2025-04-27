@@ -704,7 +704,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       )}
     </div>
 
-    {/* Chat Area */}
+   
     <div
       ref={chatContainerRef}
       className="flex-1 rounded-3xl p-6 overflow-y-auto mb-6 scrollbar-thin scrollbar-thumb-[#1E4E68]/60 "
