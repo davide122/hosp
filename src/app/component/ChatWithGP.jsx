@@ -600,7 +600,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       "Suggerimento", "Consiglio", "Consigliato", "Preferiti", "Scelti per te",
       "Da non perdere", "Imperdibile", "Esclusivo", "Unico",
       "Tat's Taormina", "Apri la scheda", "Mostrami di più", "spiaggia", "spiaggie",
-      "itinerari", "itinerario"
+      "itinerari", "itinerari", "Itinerario", "Itinerari"
     ];
     const regex = new RegExp(`\\b(${keywords.join("|")})\\b`, "gi");
     const parts = text.split(regex);
@@ -636,7 +636,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
     <header className="flex justify-between items-center mb-6">
       <button
         onClick={handleNewConversation}
-        className="px-5 py-2 ring-2 ring-[#79424f] rounded-full text-white text-base hover:bg-white/20 transition"
+        className="px-5 py-2 ring-2 ring-white rounded-full text-white text-base hover:bg-white/20 transition"
       >
         New Conversation
       </button>
