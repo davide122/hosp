@@ -1,26 +1,38 @@
-import { neon } from '@neondatabase/serverless';
-import { NextResponse } from 'next/server';
+// src/app/api/activities/list/route.js
+import { NextResponse } from "next/server";
+import { neon } from "@neondatabase/serverless";
 
-// Inizializza la connessione al database
 const sql = neon(process.env.DATABASE_URL);
 
 export async function GET() {
   try {
-    // Query per ottenere tutte le attività con le relative immagini principali
-    const { rows } = await sql`
-      SELECT a.*, 
-             (SELECT image_url FROM activity_images 
-              WHERE activity_id = a.id AND is_main = true 
-              LIMIT 1) as main_image
+    // 1) Conteggio totale
+    const countRes = await sql`
+      SELECT COUNT(*)::text AS total
+      FROM activities
+    `;
+    // countRes è un array di righe, quindi:
+    const total = parseInt(countRes[0]?.total ?? "0", 10);
+
+    // 2) Prelevo tutte le attività con l'immagine principale
+    const activities = await sql`
+      SELECT
+        a.*,
+        (
+          SELECT image_url
+          FROM activity_images
+          WHERE activity_id = a.id
+            AND is_main = true
+          LIMIT 1
+        ) AS main_image
       FROM activities a
-      ORDER BY a.id DESC
     `;
 
-    return NextResponse.json({ success: true, activities: rows });
-  } catch (error) {
-    console.error('Errore nel recupero delle attività:', error);
+    return NextResponse.json({ success: true, total, activities });
+  } catch (err) {
+    console.error("API /api/activities/list error:", err);
     return NextResponse.json(
-      { success: false, message: error.message },
+      { success: false, message: err.message },
       { status: 500 }
     );
   }

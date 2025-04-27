@@ -1,29 +1,29 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
 export default function ActivitiesPage() {
   const [activities, setActivities] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const router = useRouter();
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
 
-  // Carica le attività dal database
   useEffect(() => {
     const fetchActivities = async () => {
       try {
-        const response = await fetch('/api/activities/list');
-        
-        if (!response.ok) {
-          throw new Error('Errore nel caricamento delle attività');
+        // → punto qui:
+        const res = await fetch('/api/activities/list');
+        if (!res.ok) throw new Error('Errore nel caricamento delle attività');
+
+        const data = await res.json();
+
+        if (!data.success) {
+          throw new Error(data.message || 'API returned success: false');
         }
-        
-        const data = await response.json();
+
         setActivities(data.activities || []);
-      } catch (error) {
-        console.error('Errore nel recupero delle attività:', error);
+      } catch (err) {
+        console.error('Errore nel recupero delle attività:', err);
         setError('Impossibile caricare le attività. Riprova più tardi.');
       } finally {
         setLoading(false);
@@ -33,24 +33,16 @@ export default function ActivitiesPage() {
     fetchActivities();
   }, []);
 
-  // Elimina un'attività
   const handleDelete = async (id) => {
     if (!confirm('Sei sicuro di voler eliminare questa attività?')) return;
-    
+
     try {
       setLoading(true);
-      const response = await fetch(`/api/activities/${id}`, {
-        method: 'DELETE',
-      });
-      
-      if (!response.ok) {
-        throw new Error('Errore nell\'eliminazione dell\'attività');
-      }
-      
-      // Rimuovi l'attività dalla lista locale
-      setActivities(activities.filter(activity => activity.id !== id));
-    } catch (error) {
-      console.error('Errore nell\'eliminazione:', error);
+      const res = await fetch(`/api/activities/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Errore nell\'eliminazione');
+      setActivities((a) => a.filter((x) => x.id !== id));
+    } catch (err) {
+      console.error('Errore nell\'eliminazione:', err);
       setError('Impossibile eliminare l\'attività. Riprova più tardi.');
     } finally {
       setLoading(false);

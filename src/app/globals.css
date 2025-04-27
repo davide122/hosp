@@ -114,3 +114,13 @@ padding: 20px;
 height: 300px;
 
 }
+
+.zindex{
+  z-index: 10000 !important;
+ 
+
+}
+.zminus{
+  z-index: -1;
+  position: relative;
+}

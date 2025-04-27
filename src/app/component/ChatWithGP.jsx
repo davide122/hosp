@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import axios from "axios";
-import { FiSend, FiMic, FiStopCircle, FiPlusCircle, FiRefreshCw } from "react-icons/fi";
+import { FiSend, FiMic, FiStopCircle, FiPlay, FiPlusCircle, FiRefreshCw } from "react-icons/fi";
 import dynamic from "next/dynamic";
 
 // Import condizionale del componente di compatibilità per evitare errori SSR
@@ -17,6 +17,40 @@ const languageOptions = [
   { code: "de", label: "Deutsch", flag: "🇩🇪" },
   { code: "esp", label: "Español", flag: "🇪🇸" },
 ];
+
+function ItineraryModal({ open, onClose }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full p-6 relative animate-fade-in">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl"
+        >
+          &times;
+        </button>
+        <h2 className="text-2xl font-bold text-white mb-4">Scegli un Itinerario</h2>
+        {/* Placeholder filtri */}
+        <div className="mb-4 flex gap-2">
+          <input className="bg-gray-800 text-white rounded px-3 py-1" placeholder="Cerca..." disabled />
+          <select className="bg-gray-800 text-white rounded px-3 py-1" disabled>
+            <option>Filtra per categoria</option>
+          </select>
+        </div>
+        {/* Placeholder lista pacchetti */}
+        <div className="space-y-3">
+          {[1,2,3].map(i => (
+            <div key={i} className="bg-gray-800 rounded-xl p-4 flex flex-col gap-1 border border-gray-700/40">
+              <div className="font-semibold text-lg text-blue-400">Itinerario Placeholder {i}</div>
+              <div className="text-gray-300 text-sm">Descrizione breve del pacchetto {i}...</div>
+              <button className="mt-2 px-4 py-1 rounded bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium w-max opacity-80 hover:opacity-100" disabled>Seleziona</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const ChatWithGP = ({ onTokenUsageUpdate }) => {
   // Stati principali
@@ -48,9 +82,13 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   const chatContainerRef = useRef(null);
   const videoRef = useRef(null);
   const audioRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const sourceRef = useRef(null);
+  const analyserRef = useRef(null);
 
+  // Stato per il modale itinerary
+  const [showItineraryModal, setShowItineraryModal] = useState(false);
 
-  
   // Inizializzazione: carica la lingua preferita e gestisce la creazione del thread
   useEffect(() => {
     const initializeChat = async () => {
@@ -475,28 +513,52 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
     }
   };
 
+  // Inizializza l'AudioContext una sola volta
   useEffect(() => {
-    if (audioUrl && audioRef.current && videoRef.current) {
-      const audioContext = new AudioContext();
-      const source = audioContext.createMediaElementSource(audioRef.current);
-      const analyser = audioContext.createAnalyser();
-      source.connect(analyser);
-      analyser.connect(audioContext.destination);
-      analyser.fftSize = 128;
-      analyser.smoothingTimeConstant = 0.9;
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+    // Crea l'AudioContext solo se non esiste già
+    if (!audioContextRef.current && audioRef.current) {
+      audioContextRef.current = new AudioContext();
+      sourceRef.current = audioContextRef.current.createMediaElementSource(audioRef.current);
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      sourceRef.current.connect(analyserRef.current);
+      analyserRef.current.connect(audioContextRef.current.destination);
+      analyserRef.current.fftSize = 128;
+      analyserRef.current.smoothingTimeConstant = 0.9;
+    }
+    
+    // Cleanup quando il componente viene smontato
+    return () => {
+      if (audioContextRef.current) {
+        if (sourceRef.current) sourceRef.current.disconnect();
+        if (analyserRef.current) analyserRef.current.disconnect();
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+        sourceRef.current = null;
+        analyserRef.current = null;
+      }
+    };
+  }, []);
+  
+  // Gestisci l'analisi audio quando l'URL audio cambia
+  useEffect(() => {
+    if (audioUrl && audioRef.current && videoRef.current && analyserRef.current) {
+      const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
       const thresholdPause = 5;
       const thresholdResume = 8;
       let silenceStart = null;
       const checkInterval = 10;
+      
       const intervalId = setInterval(() => {
-        analyser.getByteTimeDomainData(dataArray);
+        if (!analyserRef.current) return;
+        
+        analyserRef.current.getByteTimeDomainData(dataArray);
         let sumSquares = 0;
         for (let i = 0; i < dataArray.length; i++) {
           const diff = dataArray[i] - 128;
           sumSquares += diff * diff;
         }
         const rms = Math.sqrt(sumSquares / dataArray.length);
+        
         if (!videoRef.current.paused) {
           if (rms < thresholdPause) {
             if (!silenceStart) {
@@ -514,11 +576,9 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
           }
         }
       }, checkInterval);
+      
       return () => {
         clearInterval(intervalId);
-        source.disconnect();
-        analyser.disconnect();
-        audioContext.close();
       };
     }
   }, [audioUrl]);
@@ -539,7 +599,8 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       "Offerta", "Sconto", "Promozione", "Pacchetto", "Promo",
       "Suggerimento", "Consiglio", "Consigliato", "Preferiti", "Scelti per te",
       "Da non perdere", "Imperdibile", "Esclusivo", "Unico",
-      "Tat’s Taormina", "Apri la scheda", "Mostrami di più", "spiaggia", "spiaggie"
+      "Tat's Taormina", "Apri la scheda", "Mostrami di più", "spiaggia", "spiaggie",
+      "itinerari", "itinerario"
     ];
     const regex = new RegExp(`\\b(${keywords.join("|")})\\b`, "gi");
     const parts = text.split(regex);
@@ -553,7 +614,13 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
           <button
             key={index}
             className="mx-1 px-3 py-1 bg-blue-600 text-white text-sm rounded-full hover:bg-blue-700 transition"
-            onClick={() => onClickHandler(part)}
+            onClick={() => {
+              if (part.toLowerCase().includes("itinerari") || part.toLowerCase().includes("itinerario")) {
+                setShowItineraryModal(true);
+              } else {
+                onClickHandler(part);
+              }
+            }}
           >
             {part}
           </button>
@@ -564,333 +631,271 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
   };
 
   return (
-    <div className="flex flex-col h-screen md:h-full bg-gradient-to-b from-gray-900 to-gray-800 relative">
-      {/* Header con dropdown per la lingua */}
-       
-   
-      <header className="flex items-center justify-between px-6 py-4 bg-gray-800 ">
+    <div className="flex flex-col h-screen w-full bg-[#082c33] p-3  ">
+    {/* Header */}
+    <header className="flex justify-between items-center mb-6">
       <button
-            onClick={handleNewConversation}
-            className=" py-1 px-4 rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:opacity-90 transition-opacity"
-          >
-            New Conversation
-          </button>
-        <div className="relative z-1000">
-          <button onClick={() => setShowLanguageDropdown(!showLanguageDropdown)} className="text-2xl z-1000">
-            {languageOptions.find((lang) => lang.code === language)?.flag || "🌐"}
-          </button>
-          {showLanguageDropdown && (
-            <div className="absolute right-0 mt-2 w-40 bg-gray-700 rounded shadow-lg z-1000">
-              {languageOptions.map((lang) => (
-                <button
-                  key={lang.code}
-                  onClick={() => {
-                    setLanguage(lang.code);
-                    localStorage.setItem("preferredLanguage", lang.code);
-                    setShowLanguageDropdown(false);
-                  }}
-                  className={`block w-full text-left px-4 py-2 hover:bg-gray-600 z-1000 ${language === lang.code ? "bg-gray-600" : ""}`}
-                >
-                  <span className="mr-2 text-xl">{lang.flag}</span>
-                  {lang.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* Sidebar semplificata */}
-  
-
-      {/* Contenuto principale */}
-      <main className="flex-1 flex flex-col max-h-50 overflow-hidden">
-        <div className="relative bg-black/90 overflow-hidden posizionad md:h-[30%]">
-          <video
-            ref={videoRef}
-            className="w-full object-cover posiziona "
-            src={getVideoSource()}
-            loop
-            autoPlay
-            muted
-            controls={false}
-          />
-          {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-              <div className="relative">
-                <div className="w-12 h-12 border-2 border-gray-200 border-t-blue-500 rounded-full animate-spin"></div>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-8 h-8 border-2 border-gray-200 border-t-purple-500 rounded-full animate-spin"></div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        {audioUrl && (
-          <>
-            <audio
-              ref={audioRef}
-              src={audioUrl}
-              autoPlay
-              onEnded={() => {
-                setAudioUrl(null);
-                videoRef.current && videoRef.current.pause();
-                setAudioCurrentTime(0);
-                setIsAudioPlaying(false);
-              }}
-              onPause={() => {
-                videoRef.current && videoRef.current.pause();
-              }}
-              onPlay={() => {
-                videoRef.current && videoRef.current.play();
-              }}
-            >
-              Il tuo browser non supporta l'elemento audio.
-            </audio>
-            
-            {/* Player audio */}
-            <div className="bg-gray-900 p-3 flex items-center space-x-3">
-              <button 
-                onClick={toggleAudioPlayback}
-                className="text-white bg-blue-600 hover:bg-blue-700 rounded-full p-2 transition-colors"
+        onClick={handleNewConversation}
+        className="px-5 py-2 ring-2 ring-[#79424f] rounded-full text-white text-base hover:bg-white/20 transition"
+      >
+        New Conversation
+      </button>
+      <div className="relative z-30">
+        <button
+          onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
+          className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg text-xl"
+        >
+          {languageOptions.find((l) => l.code === language)?.flag}
+        </button>
+        {showLanguageDropdown && (
+          <div className="absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-xl overflow-hidden z-100">
+            {languageOptions.map((l) => (
+              <button
+                key={l.code}
+                onClick={() => {
+                  setLanguage(l.code);
+                  localStorage.setItem("preferredLanguage", l.code);
+                  setShowLanguageDropdown(false);
+                }}
+                className="w-full text-left px-6 py-3 hover:bg-gray-100 flex items-center text-base"
               >
-                {isAudioPlaying ? (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                  </svg>
-                )}
+                <span className="mr-3">{l.flag}</span>
+                <span>{l.label}</span>
               </button>
-              <div className="text-xs text-gray-400 w-16">{formatTime(audioCurrentTime)}</div>
-              <div className="flex-1">
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={(audioCurrentTime / audioDuration) * 100 || 0}
-                  onChange={handleSeek}
-                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                />
-              </div>
-              <div className="text-xs text-gray-400 w-16">{formatTime(audioDuration)}</div>
-            </div>
-          </>
-        )}
-        <div className="flex-1 flex flex-col bg-gray-800/50 backdrop-blur-md">
-          <div
-            ref={chatContainerRef}
-            className="flex-1 px-4 lg:px-6 py-4 space-y-4 overflow-y-auto max-h-[330px] md:max-h-[calc(50vh-200px)] scrollbar-thin scrollbar-track-gray-800 scrollbar-thumb-gray-500 pb"
-          >
-            {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.role === "assistant" ? "justify-start" : "justify-end"}`}>
-                <div
-                  className={`max-w-[85%] lg:max-w-[70%] rounded-2xl px-5 py-3 ${
-                    msg.role === "assistant"
-                      ? "bg-gray-700/70 text-white rounded-tr-2xl rounded-tl-none"
-                      : "bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-tl-2xl rounded-tr-none"
-                  }`}
-                >
-                  {msg.role === "assistant"
-                    ? highlightKeywords(msg.content[0]?.text?.value, (keyword) => {
-                        if (
-                          keyword.toLowerCase().includes("itinerari") ||
-                          keyword.toLowerCase() === "itinerario"
-                        ) {
-                          const mockData = {
-                            name: "Tour del Centro Storico",
-                            images: ["/placeholder/img1.jpg", "/placeholder/img2.jpg"],
-                            category: "Itinerario Turistico",
-                            description: "Un meraviglioso tour del centro storico...",
-                            phone_number: "+39 123 456 7890",
-                            email: "info@tour.it",
-                            website: "www.tour-esempio.it",
-                            address: "Via Roma 123, Roma",
-                          };
-                          setActivityData(mockData);
-                          setShowModal(true);
-                        }
-                      })
-                    : msg.content[0]?.text?.value}
-                </div>
-              </div>
             ))}
-            {isTyping && (
-              <div className="flex justify-start">
-                <div className="bg-gray-700/70 text-white rounded-2xl px-4 py-2">
-                  <span className="animate-pulse">...</span>
-                </div>
-              </div>
-            )}
           </div>
-          <div className=" lg:p-6 border-t border-gray-700/50">
-           
-            <form onSubmit={handleInputSubmit} className="flex items-center barnav bg-gray-800 w-100">
-              <button
-                type="button"
-                onClick={toggleListening}
-                disabled={loading}
-                className={`p-3 rounded-xl transition-all duration-300 ${
-                  isListening ? "bg-red-500 hover:bg-red-600" : "bg-gradient-to-r from-blue-500 to-purple-500 hover:opacity-90"
-                } ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
-              >
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
-                  />
-                </svg>
-              </button>
-              <input
-                type="text"
-                value={userInput}
-                onChange={(e) => setUserInput(e.target.value)}
-                disabled={loading}
-                placeholder={loading ? "Assistant is thinking..." : "Type your message..."}
-                className="flex-1 px-2 py-3 bg-gray-700/50 text-white rounded-xl placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-              />
-              <button
-                type="submit"
-                disabled={loading || !userInput.trim()}
-                className={`px-3 py-3 rounded-xl font-small transition-all duration-300 ${
-                  loading || !userInput.trim()
-                    ? "bg-gray-700/50 text-gray-400 cursor-not-allowed"
-                    : "bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:opacity-90"
-                }`}
-              >
-                Send
-              </button>
-              {loading && runId && (
-              <div className="">
-                <button
-                  onClick={async () => {
-                    try {
-                      await axios.post(`/api/openai/threads/${threadId}/runs/${runId}/cancel`);
-                      setLoading(false);
-                      setErrorMessage("Response cancelled");
-                    } catch (error) {
-                      console.error("Error cancelling response:", error);
-                    }
-                  }}
-                  className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
-                >
-                  Cancel Response
-                </button>
-              </div>
-            )}
-            </form>
-          </div>
-        </div>
-      </main>
+        )}
+      </div>
+    </header>
 
-      {/* Modal per i dettagli dell'attività */}
-      {showModal && activityData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70">
-          <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto m-4 bg-gray-800 rounded-xl shadow-xl">
-            <div className="sticky top-0 flex items-center justify-between p-4 bg-gray-800 border-b border-gray-700 rounded-t-xl z-10">
-              <h2 className="text-2xl font-bold text-white">{activityData.name}</h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="p-2 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors"
-              >
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4">
-              {activityData.images && activityData.images.length > 0 && (
-                <div className="mb-6 overflow-hidden rounded-lg">
-                  <div className="flex space-x-2 overflow-x-auto pb-2">
-                    {activityData.images.map((imageUrl, index) => (
-                      <img
-                        key={index}
-                        src={imageUrl}
-                        alt={`${activityData.name} - image ${index + 1}`}
-                        className="w-64 h-48 object-cover rounded-lg flex-shrink-0"
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-white">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-medium text-blue-400">Contact Information</h3>
-                    <p className="mt-1 flex items-center gap-2">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                      {activityData.phone_number}
-                    </p>
-                    <p className="mt-1 flex items-center gap-2">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      {activityData.email}
-                    </p>
-                    <p className="mt-1 flex items-center gap-2">
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
-                        />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      {activityData.address}
-                    </p>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-blue-400">Category</h3>
-                    <span className="inline-block mt-1 px-3 py-1 bg-blue-500/20 text-blue-400 rounded-full">
-                      {activityData.category}
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-medium text-blue-400">Description</h3>
-                    <p className="mt-1 text-gray-300">{activityData.description}</p>
-                  </div>
-                  {activityData.menu && (
-                    <div>
-                      <h3 className="text-lg font-medium text-blue-400">Menu</h3>
-                      <p className="mt-1 text-gray-300">{activityData.menu}</p>
-                    </div>
-                  )}
-                  {activityData.prices && (
-                    <div>
-                      <h3 className="text-lg font-medium text-blue-400">Prices</h3>
-                      <p className="mt-1 text-gray-300">{activityData.prices}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="p-4 border-t border-gray-700">
-              <button
-                onClick={() => setShowModal(false)}
-                className="w-full py-2 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium hover:opacity-90 transition-opacity"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+    {/* Video + Player Overlay (limit height) */}
+    <div className="relative w-full h-64 md:h-80 rounded-3xl overflow-hidden mb-6 bg-black">
+      <video
+        ref={videoRef}
+        src={getVideoSource()}
+        loop
+        muted
+        autoPlay
+        className="w-full h-full object-cover  "
+      />
+
+      {audioUrl && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white bg-opacity-90 rounded-full px-4 py-2 flex items-center space-x-4 shadow-lg max-w-[90%]">
+          <button onClick={toggleAudioPlayback} className="flex-shrink-0 text-[#79424f] text-2xl">
+            {isAudioPlaying ? <FiStopCircle /> : <FiPlay />}
+          </button>
+          <span className="text-gray-800 font-medium">{formatTime(audioCurrentTime)}</span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={(audioCurrentTime / audioDuration) * 100 || 0}
+            onChange={handleSeek}
+            className="flex-1 h-1 rounded-full accent-[#79424f]"
+          />
         </div>
       )}
-      {errorMessage && (
-        <div className="fixed top-5 left-1/2 transform -translate-x-1/2 z-50 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg">
-          {errorMessage}
+
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
         </div>
       )}
     </div>
+
+    {/* Chat Area */}
+    <div
+      ref={chatContainerRef}
+      className="flex-1 rounded-3xl p-6 overflow-y-auto mb-6 scrollbar-thin scrollbar-thumb-[#1E4E68]/60 "
+    >
+      {messages.length === 0 ? (
+      <div></div>
+      ) : (
+        messages.map((msg) => (
+          <div
+            key={msg.id}
+            className={`flex mb-5 ${
+              msg.role === "assistant" ? "justify-start" : "justify-end"
+            }`}
+          >
+            <div
+              className={`max-w-[85%] px-6 py-4 rounded-2xl break-words text-base leading-relaxed shadow-md ${
+                msg.role === "assistant"
+                  ? "bg-[#FEF5E7] text-[#1E4E68] rounded-tr-none"
+                  : "bg-[#79424f] text-white rounded-tl-none"
+              }`}
+            >
+              {msg.content[0]?.text?.value.split(" ").map((word, i) => {
+                const clean = word.replace(/[.,]/g, "");
+                const keywords = ["Rosticceria","Da","Cristina","artigianale","cucina","gelato"];
+                if (keywords.includes(clean)) {
+                  return (
+                    <span
+                      key={i}
+                      className="inline-block bg-[#79424f] text-white px-3 py-1 rounded-full mx-1 text-sm"
+                    >
+                      {clean}
+                    </span>
+                  );
+                }
+                return word + " ";
+              })}
+            </div>
+          </div>
+        ))
+      )}
+      {isTyping && (
+        <div className="flex justify-start mb-5">
+          <div className="bg-[#FEF5E7] text-[#1E4E68] rounded-2xl px-6 py-3 animate-pulse text-lg shadow-md">
+            ...
+          </div>
+        </div>
+      )}
+    </div>
+
+    {/* Input Bar (“pill” con colori aggiornati e icone non overflow) */}
+    <form
+      onSubmit={handleInputSubmit}
+      className="relative z-20 flex items-center bg-[#FEF5E7] rounded-full px-6 py-3 shadow-xl mb-6"
+    >
+      <input
+        type="text"
+        className="
+          flex-1
+          bg-[#FEF5E7]
+          text-[#1E4E68]
+          placeholder-[#6A8A99]
+          text-base
+          px-4 py-2
+          rounded-full
+          focus:outline-none
+          focus:ring-2 focus:ring-[#F15525]
+        "
+        placeholder={loading ? "Assistant is thinking..." : "Scrivi il tuo messaggio..."}
+        value={userInput}
+        onChange={(e) => setUserInput(e.target.value)}
+        disabled={loading}
+      />
+      <button
+        type="button"
+        onClick={toggleListening}
+        disabled={loading}
+        className="flex-shrink-0 ml-4 text-2xl text-[#1E4E68]"
+      >
+        <FiMic className={isListening ? "text-red-500 animate-pulse" : "text-[#79424f]"} />
+      </button>
+      <button
+        type="submit"
+        disabled={!userInput.trim() || loading}
+        className="flex-shrink-0 ml-4 text-2xl text-[#1E4E68]"
+      >
+        <FiSend className="text-[#79424f] " />
+      </button>
+    </form>
+
+    {/* Invisible Audio Element */}
+    {audioUrl && (
+      <audio
+        ref={audioRef}
+        src={audioUrl}
+        autoPlay
+        onEnded={() => {
+          setAudioUrl(null);
+          videoRef.current?.pause();
+          setAudioCurrentTime(0);
+          setIsAudioPlaying(false);
+        }}
+        onPause={() => {
+          videoRef.current?.pause();
+          setIsAudioPlaying(false);
+        }}
+        onPlay={() => {
+          videoRef.current?.play();
+          setIsAudioPlaying(true);
+        }}
+        className="hidden"
+      />
+    )}
+
+    {/* Modal Dettagli Attività */}
+    {showModal && activityData && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6 backdrop-blur-sm">
+        <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl transform scale-95 animate-[scale-in_200ms_ease-out]">
+          <div className="p-6 border-b relative">
+            <h2 className="text-2xl font-bold text-[#1E4E68]">{activityData.name}</h2>
+            <button
+              onClick={() => setShowModal(false)}
+              className="absolute top-6 right-6 text-[#1E4E68] hover:text-gray-800 text-xl"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="p-6 space-y-6">
+            {activityData.images?.length > 0 && (
+              <div className="flex space-x-4 overflow-x-auto pb-4">
+                {activityData.images.map((img, i) => (
+                  <img
+                    key={i}
+                    src={img}
+                    alt=""
+                    className="w-40 h-32 object-cover rounded-lg flex-shrink-0 shadow"
+                  />
+                ))}
+              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-3 text-base">
+                <p className="text-[#1E4E68]">{activityData.address}</p>
+                <p className="text-[#1E4E68]">{activityData.phone_number}</p>
+                <p className="text-[#1E4E68]">{activityData.email}</p>
+                <span className="inline-block bg-[#E0F3FF] text-[#1E4E68] px-4 py-2 rounded-full text-sm">
+                  {activityData.category}
+                </span>
+              </div>
+              <div className="space-y-3 text-base">
+                <p className="text-gray-700">{activityData.description}</p>
+                {activityData.menu && (
+                  <p className="text-[#1E4E68]">
+                    <strong>Menu:</strong> {activityData.menu}
+                  </p>
+                )}
+                {activityData.prices && (
+                  <p className="text-[#1E4E68]">
+                    <strong>Prices:</strong> {activityData.prices}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="p-6 border-t">
+            <button
+              onClick={() => setShowModal(false)}
+              className="w-full bg-[#F15525] text-white py-3 rounded-full text-lg font-semibold hover:bg-[#d0461f] transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Itinerary Modal */}
+    <ItineraryModal open={showItineraryModal} onClose={() => setShowItineraryModal(false)} />
+
+    {/* Error Toast */}
+    {errorMessage && (
+      <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-[#F15525] text-white px-6 py-3 rounded-full shadow-lg text-base">
+        {errorMessage}
+      </div>
+    )}
+  </div>
   );
+  
+  
+  
+  
+  
+  
 };
 
 export default ChatWithGP;

@@ -11,18 +11,22 @@ export default function UsersPage() {
   // Carica gli utenti dal database
   useEffect(() => {
     const fetchUsers = async () => {
+      setLoading(true);
+      setError('');
       try {
-        const response = await fetch('/api/users/list');
-        
-        if (!response.ok) {
-          throw new Error('Errore nel caricamento degli utenti');
+        const res = await fetch('/api/users/list');
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.message || 'Errore nel caricamento degli utenti');
         }
-        
-        const data = await response.json();
-        setUsers(data.users || []);
-      } catch (error) {
-        console.error('Errore nel recupero degli utenti:', error);
-        setError('Impossibile caricare gli utenti. Riprova più tardi.');
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.message || 'Risposta non valida dal server');
+        }
+        setUsers(data.users);
+      } catch (err) {
+        console.error('Errore nel recupero degli utenti:', err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
@@ -74,7 +78,9 @@ export default function UsersPage() {
                     <td className="py-3 px-4">{user.id}</td>
                     <td className="py-3 px-4">{user.name}</td>
                     <td className="py-3 px-4">{user.email}</td>
-                    <td className="py-3 px-4">{new Date(user.created_at).toLocaleString()}</td>
+                    <td className="py-3 px-4">
+                      {new Date(user.created_at).toLocaleString()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
