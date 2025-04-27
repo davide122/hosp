@@ -600,7 +600,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
       "Suggerimento", "Consiglio", "Consigliato", "Preferiti", "Scelti per te",
       "Da non perdere", "Imperdibile", "Esclusivo", "Unico",
       "Tat's Taormina", "Apri la scheda", "Mostrami di più", "spiaggia", "spiaggie",
-      "itinerari", "itinerari", "Itinerario", "Itinerari"
+      "itinerari", "itinerario"
     ];
     const regex = new RegExp(`\\b(${keywords.join("|")})\\b`, "gi");
     const parts = text.split(regex);
@@ -613,7 +613,8 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
         return (
           <button
             key={index}
-            className="mx-1 px-3 py-1 bg-blue-600 text-white text-sm rounded-full hover:bg-blue-700 transition"
+            className="mx-1 px-3 py-1 text-white text-sm rounded-full transition"
+            style={{ background: "#79424f" }}
             onClick={() => {
               if (part.toLowerCase().includes("itinerari") || part.toLowerCase().includes("itinerario")) {
                 setShowItineraryModal(true);
@@ -626,7 +627,7 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
           </button>
         );
       }
-      return <span key={index}>{part}</span>;
+      return <span key={index}>{part} </span>;
     });
   };
 
@@ -725,21 +726,9 @@ const ChatWithGP = ({ onTokenUsageUpdate }) => {
                   : "bg-[#79424f] text-white rounded-tl-none"
               }`}
             >
-              {msg.content[0]?.text?.value.split(" ").map((word, i) => {
-                const clean = word.replace(/[.,]/g, "");
-                const keywords = ["Rosticceria","Da","Cristina","artigianale","cucina","gelato"];
-                if (keywords.includes(clean)) {
-                  return (
-                    <span
-                      key={i}
-                      className="inline-block bg-[#79424f] text-white px-3 py-1 rounded-full mx-1 text-sm"
-                    >
-                      {clean}
-                    </span>
-                  );
-                }
-                return word + " ";
-              })}
+              {msg.role === "assistant"
+                ? highlightKeywords(msg.content[0]?.text?.value, (keyword) => {/* azione su click */})
+                : msg.content[0]?.text?.value}
             </div>
           </div>
         ))
