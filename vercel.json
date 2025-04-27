@@ -7,7 +7,7 @@
     }
   ],
   "env": {
-    "NEXT_PUBLIC_BASE_URL": "@next_public_base_url"
+    "NEXT_PUBLIC_BASE_URL": "https://hosp-lovat.vercel.app/"
   },
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
